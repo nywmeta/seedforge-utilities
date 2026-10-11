@@ -6,6 +6,10 @@ Small free tools for recurring, specific software frustrations. Source code is M
 
 [LAN Cast](utilities/lan-cast/README.md) sends a direct video URL from a Chromium browser to a local UPnP/DLNA renderer. It includes a Python standard-library helper, playback controls and explicit setup/removal instructions.
 
+**[Download LAN Cast 1.1.1 release candidate (ZIP)](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip)** · [Release notes](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.1.1-rc) · [SHA-256 checksum](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip.sha256)
+
+Extract the ZIP and follow the included setup instructions. Python 3.9+ is required.
+
 **Release candidate:** automated checks cover a simulated renderer. Actual TV playback and installed native-host lookup still require verification. It does not mirror tabs, bypass DRM, transcode video, or transfer browser login credentials.
 
 ## How we choose work

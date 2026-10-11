@@ -1,12 +1,12 @@
-# LAN Cast release preparation
+# LAN Cast verified release
 
-Status: checked release candidate. Public downloadable release verification is pending.
+Status: [published release candidate](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.1.1-rc), verified anonymously on 11 October 2026. Release commit: `3a227b89892afa7b0cc9ef41601d6fe208bac2fb`. [Live GitHub CI succeeded](https://github.com/nywmeta/seedforge-utilities/actions/runs/38127183565).
 
 Repository: `nywmeta/seedforge-utilities`, public, MIT licensed.
 
 Repository description: Small free MIT-licensed utilities for recurring software frustrations, starting with a direct-stream UPnP/DLNA caster.
 
-Tag: `lan-cast-v1.1.1-rc`. Mark the release as a **prerelease**.
+Tag: `lan-cast-v1.1.1-rc`. Published as a **prerelease**.
 
 Title: LAN Cast 1.1.1 — direct-stream casting release candidate
 
@@ -24,9 +24,9 @@ Download and extract the ZIP, then read its README for setup and removal. Python
 
 Optional support will be added only after the owner confirms a recipient page. Support is never required.
 
-## Upload and verify
+## Verify the published release
 
-Publish the complete repository source, not only this document or the binary ZIP. Attach `dist/lan-cast-v1.1.1-rc.zip` and its `.sha256` file to the prerelease. Then run:
+The public repository contains the complete source. The prerelease supplies [the checked ZIP](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip) and [its checksum](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip.sha256). To repeat anonymous verification against a locally checked archive, run:
 
 ```sh
 python3 scripts/verify_publication.py --repo nywmeta/seedforge-utilities --tag lan-cast-v1.1.1-rc --archive dist/lan-cast-v1.1.1-rc.zip

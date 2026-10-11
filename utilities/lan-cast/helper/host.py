@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 
 HOST_NAME = "com.lancast.bridge"
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 END_OF_STREAM = object()
 MAX_INPUT = 64 * 1024
 MAX_OUTPUT = 256 * 1024
@@ -451,6 +451,12 @@ def handle_request(request):
         action = require_string(request, "action", maximum=32)
         if action == "ping":
             return {"ok": True, "version": VERSION, "host": HOST_NAME}
+        if action == "open_file_cast":
+            try:
+                from companion import open_interface
+                return {"ok": True, "url": open_interface()}
+            except (OSError, ValueError, ImportError) as error:
+                raise BridgeError("FILE_HELPER_UNAVAILABLE", str(error))
         if action == "discover":
             result = discover(numeric_value(request, "timeout", 4.0, 0.5, 8.0))
             return dict(ok=True, **result)

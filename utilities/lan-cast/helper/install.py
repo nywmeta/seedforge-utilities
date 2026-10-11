@@ -7,10 +7,10 @@ import os
 from pathlib import Path
 import re
 import shlex
-import shutil
 import sys
 
 HOST = "com.lancast.bridge"
+HELPER_FILES = ("host.py", "file_cast.py", "companion.py")
 BROWSERS = ("opera-gx", "opera", "chrome", "edge", "chromium")
 SHARED_CHROME_HOST = {"opera-gx", "opera"}
 REGISTRY = {
@@ -32,7 +32,9 @@ def install_directory(home, platform):
 def manifest_path(home, platform, browser, application):
     if platform == "darwin":
         product = {"chrome": "Google/Chrome", "edge": "Microsoft Edge", "chromium": "Chromium",
-                   "opera": "com.operasoftware.Opera", "opera-gx": "com.operasoftware.OperaGX"}[browser]
+                   "opera": "Google/Chrome", "opera-gx": "Google/Chrome"}[browser]
+        # Opera's documented macOS native-host lookup uses Chrome's directory,
+        # shared by Opera GX, Opera and Chrome. Retain their allowed IDs below.
         return home / "Library/Application Support" / product / "NativeMessagingHosts" / (HOST + ".json")
     if platform == "win32":
         # Opera's documented Windows native-host registration uses Chrome's
@@ -116,12 +118,25 @@ def run(args):
     launcher = application / ("launch-host.cmd" if sys.platform == "win32" else "launch-host")
     host = application / "host.py"
     python = Path(sys.executable).resolve()
-    source = Path(__file__).with_name("host.py")
 
     if not args.uninstall and not args.extension_id:
         raise ValueError("Supply --extension-id with the ID from opera://extensions, chrome://extensions, or edge://extensions.")
-    if not args.uninstall and not source.is_file():
-        raise ValueError("host.py is missing. Keep install.py beside host.py in the downloaded package.")
+    helper_files = []
+    launcher_bytes = None
+    if not args.uninstall:
+        # Read and validate every required module and launcher before touching
+        # an installed helper, including when repairing an older installation.
+        launcher_bytes = launcher_text(python, host, sys.platform).encode("utf-8")
+        for name in HELPER_FILES:
+            source = Path(__file__).with_name(name)
+            if not source.is_file():
+                raise ValueError(name + " is missing. Keep install.py beside all helper files in the downloaded package.")
+            content = source.read_bytes()
+            try:
+                compile(content, name, "exec")
+            except (SyntaxError, ValueError) as exc:
+                raise ValueError(name + " is not a valid Python helper file.") from exc
+            helper_files.append((application / name, content))
 
     manifests = []
     planned_paths = set()
@@ -134,6 +149,11 @@ def run(args):
         value = None if args.uninstall else make_manifest(launcher, args.extension_id, previous)
         manifests.append((browser, path, value))
 
+    if (args.uninstall and sys.platform in ("darwin", "win32")
+            and any(browser in SHARED_CHROME_HOST or browser == "chrome" for browser in browsers)):
+        print("Opera GX, Opera and Chrome share this native-host registration. Unregistering it also disconnects Lan Cast in those browsers.")
+        print("Re-run the installer with each remaining browser's extension ID to restore access.")
+
     if args.dry_run:
         print("Preview only; no files or settings were changed.")
         print("Helper folder: " + str(application))
@@ -145,12 +165,13 @@ def run(args):
 
     if not args.uninstall:
         application.mkdir(parents=True, exist_ok=True)
-        text = launcher_text(python, host, sys.platform)
-        shutil.copy2(source, host)
-        launcher.write_bytes(text.encode("utf-8"))
+        for target, content in helper_files:
+            target.write_bytes(content)
+            if sys.platform != "win32":
+                target.chmod(0o600)
+        launcher.write_bytes(launcher_bytes)
         if sys.platform != "win32":
             launcher.chmod(0o700)
-            host.chmod(0o600)
 
     for browser, path, value in manifests:
         if args.uninstall:

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up LAN Cast</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <main>
+    <header><img src="icons/icon128.png" width="60" height="60" alt=""><div><p class="eyebrow">LAN CAST</p><h1>Your browser. Your TV.</h1><p>One-time setup for direct video casting over your local network.</p></div></header>
+    <section class="setup-card">
+      <h2><span>1</span> Install the local helper</h2>
+      <p>LAN Cast uses a small helper to discover and control UPnP / DLNA playback devices. Install Python 3, then open <strong>Install on Mac.command</strong> on macOS or <strong>Install on Windows.cmd</strong> on Windows from the extracted <strong>lan-cast</strong> folder. Enter the extension ID below and your browser when prompted. For Opera GX on a Mac, choose <strong>Opera GX</strong>; choose <strong>Opera</strong> for the standard Opera browser.</p>
+      <p>Alternatively, open a terminal in that folder and run the command below. Use the command on Linux.</p>
+      <label for="browser">Browser to register</label>
+      <select id="browser" aria-describedby="browser-hint"><option value="opera-gx">Opera GX</option><option value="opera">Opera</option><option value="chrome">Google Chrome</option><option value="edge">Microsoft Edge</option><option value="chromium">Chromium</option><option value="all">All supported browsers</option></select>
+      <p id="browser-hint" class="hint">Choose the browser where this extension is loaded.</p>
+      <div class="command-row"><code id="install-command"></code><button id="copy-command" type="button">Copy</button></div>
+      <p id="copy-state" class="hint" role="status" aria-live="polite">The command includes this extension’s ID.</p>
+      <details><summary>Extension ID</summary><code id="extension-id"></code><p class="hint">If you move or load a different copy of the extension, its ID may change. Run the installer again with the ID shown by that copy.</p></details>
+    </section>
+    <section class="setup-card"><h2><span>2</span> Connect your TV</h2><p>Turn the TV on and connect it to the same local network as this computer. A guest network or router isolation can prevent discovery. The TV must expose a UPnP / DLNA media renderer with playback controls.</p><p>Open the LAN Cast popup and select <strong>Find TVs</strong>. If discovery is blocked, you can try the TV’s IP address or its complete UPnP device description URL.</p></section>
+    <section class="setup-card"><h2><span>3</span> Choose and cast a stream</h2><p>Open a video webpage and start its video. Open LAN Cast, choose <strong>Scan page</strong>, select a stream and a TV, then select <strong>Cast to TV</strong>. You can also paste a complete HTTP or HTTPS video URL.</p><p>The TV fetches the stream itself. The stream must use a format it supports and be accessible without your browser’s cookies, session, or extra request headers. Network candidates are unverified; HLS and DASH playback depends on the TV and the stream.</p></section>
+    <aside><h2>Know the limits</h2><p>Browser-only blob URLs and DRM video are unsupported. This extension sends a media URL; it does not mirror your tab or transcode video. A TV accepting a command does not prove it can decode the stream. Check the picture on the TV and refresh playback status if needed.</p></aside>
+    <footer>Open the extension popup again after installation. <span id="platform-hint"></span></footer>
+  </main>
+  <script src="setup.js"></script>
+</body>
+</html>

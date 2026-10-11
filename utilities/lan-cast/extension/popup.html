@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LAN Cast</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main id="app">
+    <header class="header">
+      <div class="brand"><img src="icons/icon48.png" alt="" width="38" height="38"><div><h1>LAN Cast</h1><p>From this page to your TV</p></div></div>
+      <a class="setup-link" href="setup.html" target="_blank" rel="noopener">Setup <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <div class="connection-line"><span id="helper-dot" class="dot"></span><span id="helper-state">Checking local helper…</span><button id="retry-helper" class="text-button" hidden>Retry</button></div>
+    <div id="helper-help" class="helper-help" hidden>The local helper is required to find and control TVs. Run the installer included with LAN Cast, then reopen this popup. <a href="setup.html" target="_blank" rel="noopener">Open setup steps</a></div>
+
+    <div class="choices" aria-label="Video and TV selection">
+    <section class="card" aria-labelledby="source-heading">
+      <div class="section-header"><h2 id="source-heading"><span class="step">1</span> Choose a video</h2><button id="scan" class="button small">Scan page</button></div>
+      <label for="source">Video found on this page</label>
+      <select id="source"><option value="">Scan the page to find videos</option></select>
+      <p id="source-summary" class="hint">Start the video on the page, then scan.</p>
+      <details id="direct-source" class="direct-source">
+        <summary>Paste a direct stream URL</summary>
+        <label for="media-url">Video URL</label>
+        <input id="media-url" type="url" placeholder="https://example.com/video.mp4" spellcheck="false" autocomplete="off">
+        <p class="hint">A pasted URL takes priority. The TV must be able to open it.</p>
+      </details>
+    </section>
+
+    <section class="card" aria-labelledby="tv-heading">
+      <div class="section-header"><h2 id="tv-heading"><span class="step">2</span> Choose a TV</h2><button id="discover" class="button small" disabled>Find TVs</button></div>
+      <label for="device">UPnP / DLNA renderer</label>
+      <select id="device" disabled><option value="">Find TVs on your local network</option></select>
+      <p id="device-summary" class="hint">Keep the TV on and connected to the same network.</p>
+      <details class="manual-device">
+        <summary>Enter a TV address</summary>
+        <label for="device-address">IP address or device description URL</label>
+        <div class="input-row"><input id="device-address" type="text" placeholder="192.168.1.50" spellcheck="false" autocomplete="off"><button id="add-device" class="button small" disabled>Add</button></div>
+        <p class="hint">An IP address may require network discovery to find its service. A complete description URL is more reliable.</p>
+      </details>
+    </section>
+    </div>
+
+    <button id="cast" class="button primary" disabled><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 8V5h15v12h-6M4 17v3h3M4 13a7 7 0 0 1 7 7M4 9a11 11 0 0 1 11 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Cast to TV</span></button>
+
+    <section class="playback" aria-label="TV playback controls">
+      <div class="playback-status"><span id="transport-state">TV playback</span><span id="playback-time">—</span></div>
+      <div class="controls"><button id="play" class="button control" disabled aria-label="Play on TV">▶ <span>Play</span></button><button id="pause" class="button control" disabled aria-label="Pause on TV">Ⅱ <span>Pause</span></button><button id="stop" class="button control" disabled aria-label="Stop on TV">■ <span>Stop</span></button><button id="refresh-status" class="button control refresh" disabled aria-label="Refresh TV playback status">↻</button></div>
+    </section>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <p id="busy" class="busy" role="status" aria-live="polite" hidden><span class="spinner" aria-hidden="true"></span><span id="busy-label"></span></p>
+    <footer>Direct streams only. Protected video, browser-only blob URLs, and streams requiring your browser’s login cannot be cast.</footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

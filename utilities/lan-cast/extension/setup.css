@@ -1,0 +1,32 @@
+:root { color-scheme: light; color: #152c3d; background: #f1f6f8; font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 760px; padding: 48px 24px; margin: 0 auto; }
+header { display: flex; align-items: center; gap: 18px; margin-bottom: 30px; }
+header img { flex: 0 0 auto; }
+h1, h2, p { margin: 0; }
+h1 { font-size: 32px; line-height: 1.2; letter-spacing: -1px; }
+header p:not(.eyebrow) { color: #506877; margin-top: 7px; font-size: 14px; }
+.eyebrow { color: #126a8d; letter-spacing: 2px; font-size: 11px; font-weight: 700; margin-bottom: 5px; }
+.setup-card { background: #fff; border: 1px solid #d9e4e9; border-radius: 15px; padding: 23px 26px; margin-bottom: 16px; }
+h2 { display: flex; align-items: center; gap: 9px; font-size: 18px; letter-spacing: -.3px; margin-bottom: 11px; }
+h2 span { display: inline-grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; background: #e2f3ef; color: #176d59; font-size: 13px; }
+.setup-card p, aside p { font-size: 14px; color: #405b6b; }
+p + p { margin-top: 10px; }
+label { display: block; font-size: 12px; font-weight: 600; color: #405b6b; margin: 18px 0 5px; }
+select, button { font: inherit; font-size: 13px; background: #fff; color: #152c3d; border: 1px solid #c8d7df; border-radius: 7px; padding: 8px 11px; }
+select { width: 240px; max-width: 100%; }
+button { cursor: pointer; font-weight: 600; }
+button:hover { background: #edf5f7; }
+button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #1888ae; outline-offset: 2px; }
+.command-row { display: flex; align-items: center; gap: 12px; background: #f1f6f8; border: 1px solid #d9e4e9; border-radius: 9px; padding: 13px 14px; margin-top: 12px; }
+code { font: 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+.command-row code { flex: 1; }
+.hint { font-size: 12px !important; margin-top: 8px; color: #506877 !important; }
+details { font-size: 13px; margin-top: 14px; }
+summary { color: #126a8d; cursor: pointer; }
+details code { display: block; margin-top: 7px; }
+aside { padding: 15px 4px; }
+aside h2 { font-size: 15px; }
+footer { border-top: 1px solid #d9e4e9; color: #506877; font-size: 12px; padding-top: 16px; margin-top: 15px; }
+@media (max-width: 520px) { main { padding: 28px 16px; } h1 { font-size: 25px; } header { gap: 12px; } .setup-card { padding: 20px; } .command-row { flex-wrap: wrap; } .command-row code { flex: 1 0 100%; } }

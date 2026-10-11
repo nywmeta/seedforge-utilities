@@ -38,6 +38,7 @@ function requireHttpUrl(value, label, maximum = MAX_URL_LENGTH) {
 function nativePayload(message) {
   switch (message.action) {
     case 'ping': return { action: 'ping' };
+    case 'open_file_cast': return { action: 'open_file_cast' };
     case 'discover': return { action: 'discover', timeout: 4 };
     case 'addDevice': {
       const address = requireString(message.address, 'TV address', MAX_LOCATION_LENGTH);
@@ -140,11 +141,27 @@ async function scanActiveTab() {
     // Retry the main document so one inaccessible frame cannot hide its videos.
     try {
       results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['media.js'] });
-      frameWarning = 'Some embedded frames could not be scanned. Open the video’s own page if it is missing.';
+      frameWarning = 'Some embedded frames could not be scanned. Open the player’s own page in a new tab, start the video there, and scan again.';
     } catch {
       throw new RequestError('SCAN_BLOCKED', scanError(error.message || ''));
     }
   }
+  // Some browsers skip inaccessible frames without rejecting the injection.
+  // Report only whether cross-origin embeds exist; no frame URLs are returned.
+  try {
+    const [embedded] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => [...document.querySelectorAll('iframe[src]')].some((frame) => {
+        try {
+          const url = new URL(frame.getAttribute('src'), document.baseURI);
+          return ['http:', 'https:'].includes(url.protocol) && url.origin !== location.origin;
+        } catch { return false; }
+      }),
+    });
+    if (embedded?.result === true && !frameWarning) {
+      frameWarning = 'This page has content embedded from another site. If the video is missing, open the player’s own page in a new tab, start it there, and scan again.';
+    }
+  } catch { /* Keep the media scan usable if the embed check is unavailable. */ }
   const sources = [];
   const seen = new Map();
   const blocked = { blob: 0, data: 0, encrypted: 0, empty: 0 };

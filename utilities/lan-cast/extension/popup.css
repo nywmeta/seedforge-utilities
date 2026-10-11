@@ -20,6 +20,9 @@ a { color: var(--blue); text-underline-offset: 3px; }
 .helper-help { border: 1px solid #e8ceb5; background: #fff6ed; padding: 11px 12px; border-radius: 10px; font-size: 12px; margin-bottom: 12px; color: #704624; }
 .helper-help a { display: inline-block; font-weight: 600; margin-top: 4px; }
 .card { padding: 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 13px; margin-bottom: 11px; box-shadow: 0 2px 5px #17344604; }
+.file-cast-card { padding: 12px; background: #e5f3f6; border: 1px solid #accfdc; border-radius: 13px; margin-bottom: 11px; }
+.file-cast-button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #0d5878; min-height: 40px; text-align: left; }
+.file-cast-card .hint { margin-top: 7px; }
 .section-header { margin-bottom: 12px; gap: 8px; }
 h2 { font-size: 14px; display: flex; align-items: center; gap: 7px; letter-spacing: -.2px; }
 .step { width: 20px; height: 20px; display: inline-grid; place-items: center; border-radius: 6px; font-size: 11px; font-weight: 700; background: var(--mint); color: #176d59; }

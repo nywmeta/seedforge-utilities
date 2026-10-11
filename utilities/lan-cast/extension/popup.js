@@ -19,6 +19,16 @@ function isHttpUrl(value) {
   } catch { return false; }
 }
 
+function fileCastUrl(value) {
+  // Accept only the helper's exact loopback origin and opaque single-token path.
+  const match = typeof value === 'string'
+    ? /^http:\/\/127\.0\.0\.1:([1-9][0-9]{0,4})\/([A-Za-z0-9_-]{32,128})\/$/.exec(value) : null;
+  if (!match || Number(match[1]) > 65535) {
+    throw new Error('The helper returned an invalid local video page. Update the helper and try again.');
+  }
+  return value;
+}
+
 function selectedDevice() { return state.devices.find((device) => device.location === $('device').value); }
 function selectedSource() { return state.sources.find((source) => source.url === $('source').value); }
 function mediaUrl() { return $('media-url').value.trim() || selectedSource()?.url || ''; }
@@ -29,6 +39,7 @@ function updateButtons() {
   const hasDevice = Boolean(selectedDevice());
   $('scan').disabled = !idle;
   $('discover').disabled = !native;
+  $('file-cast').disabled = !native;
   $('add-device').disabled = !native || !$('device-address').value.trim();
   $('source').disabled = !idle || !state.sources.length;
   $('device').disabled = !idle || !state.devices.length;
@@ -63,7 +74,10 @@ async function request(payload) {
   }
   if (!reply || reply.ok !== true) {
     const code = reply?.error?.code || 'REQUEST_FAILED';
-    const message = typeof reply?.error?.message === 'string' ? reply.error.message : 'The request failed.';
+    let message = typeof reply?.error?.message === 'string' ? reply.error.message : 'The request failed.';
+    if (payload.action === 'open_file_cast' && code === 'UNKNOWN_ACTION') {
+      message = 'Your installed helper needs an update for downloaded videos. Run this version’s helper installer, then reopen LAN Cast.';
+    }
     if (/^HELPER_(MISSING|UNAVAILABLE|DISCONNECTED)$/.test(code)) setHelper(false);
     const error = new Error(message);
     error.code = code;
@@ -115,8 +129,8 @@ function renderSources(reply) {
   const blocked = reply.blocked || {};
   const notes = [];
   if (state.sources.length) notes.push(`${state.sources.length} stream${state.sources.length === 1 ? '' : 's'} found. Network candidates are unverified.`);
-  else notes.push('No direct stream found. Try playing the video, then scan again, or paste its direct URL.');
-  if (blocked.blob || blocked.data) notes.push('Browser-only blob/data video URLs cannot be sent to the TV.');
+  else notes.push('No direct stream found. Start the video and scan again, or open the player’s own page if it is embedded. If the site offers a normal Download button, save the video and choose “Cast a downloaded video” above.');
+  if (blocked.blob || blocked.data) notes.push('This video uses a browser-only blob/data URL that the TV cannot open. A normal site download can be played through “Cast a downloaded video”; protected playback remains unsupported.');
   if (blocked.encrypted) notes.push('A protected video was detected; DRM video is not supported.');
   if (reply.frameWarning) notes.push(reply.frameWarning);
   $('source-summary').textContent = notes.join(' ');
@@ -196,6 +210,13 @@ async function checkHelper() {
 
 $('scan').addEventListener('click', () => run('Looking for video streams…', async () => {
   renderSources(await request({ action: 'scan' }));
+}));
+
+$('file-cast').addEventListener('click', () => run('Opening downloaded video casting…', async () => {
+  const reply = await request({ action: 'open_file_cast' });
+  const url = fileCastUrl(reply.url);
+  await chrome.tabs.create({ url });
+  notice('Opened LAN Cast for downloaded videos. Choose your saved video and TV in the new tab.', 'success');
 }));
 
 $('discover').addEventListener('click', () => run('Finding TVs on your network…', async () => {

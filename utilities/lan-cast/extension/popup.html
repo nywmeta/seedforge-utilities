@@ -17,6 +17,10 @@
     <div id="helper-help" class="helper-help" hidden>The local helper is required to find and control TVs. Run the installer included with LAN Cast, then reopen this popup. <a href="setup.html" target="_blank" rel="noopener">Open setup steps</a></div>
 
     <div class="choices" aria-label="Video and TV selection">
+    <section class="file-cast-card" aria-label="Downloaded video casting">
+      <button id="file-cast" class="button file-cast-button" disabled aria-describedby="file-cast-hint">Cast a downloaded video <span aria-hidden="true">↗</span></button>
+      <p id="file-cast-hint" class="hint">Choose a saved video and your TV in a new tab.</p>
+    </section>
     <section class="card" aria-labelledby="source-heading">
       <div class="section-header"><h2 id="source-heading"><span class="step">1</span> Choose a video</h2><button id="scan" class="button small">Scan page</button></div>
       <label for="source">Video found on this page</label>
@@ -53,7 +57,7 @@
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
     <p id="busy" class="busy" role="status" aria-live="polite" hidden><span class="spinner" aria-hidden="true"></span><span id="busy-label"></span></p>
-    <footer>Direct streams only. Protected video, browser-only blob URLs, and streams requiring your browser’s login cannot be cast.</footer>
+    <footer>TV playback depends on format support. Protected video and streams requiring your browser’s login are unsupported.</footer>
   </main>
   <script src="popup.js"></script>
 </body>

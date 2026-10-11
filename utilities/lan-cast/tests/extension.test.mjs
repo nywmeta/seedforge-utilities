@@ -91,7 +91,7 @@ function element({ currentSrc = '', src = '', sources = [], mediaKeys = null, ta
   };
 }
 
-async function popup({ saved = {}, onRequest = async () => ({ ok: true }) } = {}) {
+async function popup({ saved = {}, onRequest = async () => ({ ok: true }), onOpenTab = async () => ({ id: 1 }) } = {}) {
   class MockElement {
     value = '';
     textContent = '';
@@ -111,6 +111,7 @@ async function popup({ saved = {}, onRequest = async () => ({ ok: true }) } = {}
   elements['transport-state'].textContent = 'TV playback';
   elements['playback-time'].textContent = '—';
   const requests = [];
+  const openedTabs = [];
   const storage = { ...saved };
   const context = vm.createContext({
     URL,
@@ -119,12 +120,13 @@ async function popup({ saved = {}, onRequest = async () => ({ ok: true }) } = {}
     chrome: {
       storage: { local: { get: async () => storage, set: async (values) => Object.assign(storage, values) } },
       runtime: { sendMessage: async (request) => { requests.push(request); return onRequest(request); } },
+      tabs: { create: async (options) => { openedTabs.push(options); return onOpenTab(options); } },
     },
   });
   vm.runInContext(popupCode, context);
   await new Promise(setImmediate);
   return {
-    elements, requests, storage, context,
+    elements, requests, openedTabs, storage, context,
     click: async (id) => { await elements[id].listeners.get('click')(); await new Promise(setImmediate); },
     change: async (id, value) => { elements[id].value = value; await elements[id].listeners.get('change')(); await new Promise(setImmediate); },
   };
@@ -198,6 +200,13 @@ test('native payloads omit arbitrary fields and use a fixed discovery timeout', 
   const host = background();
   await host.send({ action: 'discover', timeout: 3600, shell: 'arbitrary' });
   assert.deepEqual(JSON.parse(JSON.stringify(host.requests[0])), { action: 'discover', timeout: 4 });
+});
+
+test('downloaded video companion request forwards only its whitelisted action', async () => {
+  const host = background();
+  const reply = await host.send({ action: 'open_file_cast', path: '/private/file', url: 'https://example.test', shell: 'arbitrary' });
+  assert.equal(reply.ok, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(host.requests[0])), { action: 'open_file_cast' });
 });
 
 test('cast rejects unsupported or authenticated URLs before opening the native host', async () => {
@@ -332,8 +341,47 @@ test('inaccessible embedded frames fall back to a main-document scan with a warn
   assert.equal(reply.ok, true);
   assert.equal(reply.sources.length, 1);
   assert.match(reply.frameWarning, /embedded frames/);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[1].target.allFrames, undefined);
+  assert.equal(typeof calls[2].func, 'function');
+});
+
+test('silently skipped cross-origin embeds still produce useful scan guidance', async () => {
+  const host = background({ executeScript: async (request) => request.func
+    ? [{ frameId: 0, result: true }]
+    : [{ frameId: 0, result: { sources: [], blocked: {} } }] });
+  const reply = await host.send({ action: 'scan' });
+  assert.equal(reply.ok, true);
+  assert.equal(reply.sources.length, 0);
+  assert.equal(reply.frameCount, 1);
+  assert.match(reply.frameWarning, /another site/);
+  assert.match(reply.frameWarning, /player’s own page/);
+  assert.equal(host.requests.length, 0);
+});
+
+test('embed inspection reports only a boolean and distinguishes cross-origin HTTP frames', async () => {
+  let inspect;
+  const host = background({ executeScript: async (request) => {
+    if (request.func) inspect = request.func;
+    return request.func ? [{ frameId: 0, result: false }] : [];
+  } });
+  await host.send({ action: 'scan' });
+  const inspectFrames = (urls) => vm.runInNewContext(`(${inspect.toString()})()`, {
+    URL, location: { origin: 'https://page.example' },
+    document: { baseURI: 'https://page.example/watch', querySelectorAll: () => urls.map((url) => ({ getAttribute: () => url })) },
+  });
+  assert.equal(inspectFrames(['/player', 'https://page.example/embed', 'about:blank', 'javascript:alert(1)']), false);
+  assert.equal(inspectFrames(['https://player.example/embed']), true);
+});
+
+test('unavailable embed inspection preserves an otherwise successful media scan', async () => {
+  const host = background({ executeScript: async (request) => {
+    if (request.func) throw new Error('Embed inspection unavailable.');
+    return [{ frameId: 0, result: { sources: [testSource], blocked: {} } }];
+  } });
+  const reply = await host.send({ action: 'scan' });
+  assert.equal(reply.ok, true);
+  assert.equal(reply.sources[0].url, testSource.url);
 });
 
 test('blocked browser page scans give actionable feedback', async () => {
@@ -444,8 +492,89 @@ test('popup missing-helper feedback keeps scan available and casting disabled', 
   assert.equal(ui.elements['retry-helper'].hidden, false);
   assert.equal(ui.elements.scan.disabled, false);
   assert.equal(ui.elements.discover.disabled, true);
+  assert.equal(ui.elements['file-cast'].disabled, true);
   assert.equal(ui.elements.cast.disabled, true);
   assert.match(ui.elements.notice.textContent, /not found/);
+});
+
+test('downloaded video companion opens without choosing a stream or a TV', async () => {
+  const url = `http://127.0.0.1:40500/${'a'.repeat(43)}/`;
+  const ui = await popup({ onRequest: (request) => request.action === 'open_file_cast'
+    ? { ok: true, url } : normalPopupReply(request) });
+  assert.equal(ui.elements['file-cast'].disabled, false);
+  assert.equal(ui.elements.cast.disabled, true);
+  await ui.click('file-cast');
+  assert.equal(ui.openedTabs.length, 1);
+  assert.equal(ui.openedTabs[0].url, url);
+  const companionRequest = ui.requests.find((request) => request.action === 'open_file_cast');
+  assert.deepEqual(JSON.parse(JSON.stringify(companionRequest)), { action: 'open_file_cast' });
+  assert.match(ui.elements.notice.textContent, /new tab/);
+  assert.equal(ui.elements['transport-state'].textContent, 'TV playback');
+  assert.ok(!Object.values(ui.storage).includes(url));
+});
+
+test('companion rejects non-literal loopback origins and malformed token URLs before opening a tab', async () => {
+  const token = 'a'.repeat(43);
+  for (const url of [
+    undefined, 42, `https://127.0.0.1:40500/${token}/`, `http://localhost:40500/${token}/`,
+    `http://127.0.0.2:40500/${token}/`, `http://[::1]:40500/${token}/`, `http://127.1:40500/${token}/`,
+    `http://2130706433:40500/${token}/`, `http://0x7f000001:40500/${token}/`, `http://127.0.0.1/${token}/`,
+    `http://127.0.0.1:0/${token}/`, `http://127.0.0.1:65536/${token}/`, `http://127.0.0.1:040500/${token}/`,
+    `http://user@127.0.0.1:40500/${token}/`, `http://127.0.0.1:40500/${token}/?x=1`,
+    `http://127.0.0.1:40500/${token}/#x`, 'http://127.0.0.1:40500/short/',
+    `http://127.0.0.1:40500/${'a'.repeat(129)}/`, `http://127.0.0.1:40500/${token}/extra/`,
+    `http://127.0.0.1:40500/${token}`, `http://127.0.0.1:40500/%61${token}/`,
+  ]) {
+    const ui = await popup({ onRequest: (request) => request.action === 'open_file_cast'
+      ? { ok: true, url } : normalPopupReply(request) });
+    await ui.click('file-cast');
+    assert.equal(ui.openedTabs.length, 0, String(url));
+    assert.equal(ui.elements.notice.className, 'notice error');
+    assert.match(ui.elements.notice.textContent, /invalid local video page/);
+  }
+});
+
+test('companion failures do not open a tab or claim casting success', async () => {
+  const ui = await popup({ onRequest: (request) => request.action === 'open_file_cast'
+    ? { ok: false, error: { code: 'HELPER_MISSING', message: 'Local helper is missing.' } }
+    : normalPopupReply(request) });
+  await ui.click('file-cast');
+  assert.equal(ui.openedTabs.length, 0);
+  assert.equal(ui.elements.notice.textContent, 'Local helper is missing.');
+  assert.equal(ui.elements['file-cast'].disabled, true);
+  assert.equal(ui.elements['transport-state'].textContent, 'TV playback');
+});
+
+test('an older helper gives a concrete update instruction for downloaded videos', async () => {
+  const ui = await popup({ onRequest: (request) => request.action === 'open_file_cast'
+    ? { ok: false, error: { code: 'UNKNOWN_ACTION', message: 'Unknown bridge action.' } }
+    : normalPopupReply(request) });
+  await ui.click('file-cast');
+  assert.equal(ui.openedTabs.length, 0);
+  assert.match(ui.elements.notice.textContent, /helper needs an update/);
+  assert.match(ui.elements.notice.textContent, /helper installer/);
+});
+
+test('blocked companion tab creation reports its error', async () => {
+  const ui = await popup({ onRequest: (request) => request.action === 'open_file_cast'
+    ? { ok: true, url: `http://127.0.0.1:40500/${'a'.repeat(43)}/` } : normalPopupReply(request),
+  onOpenTab: async () => { throw new Error('The browser blocked opening this tab.'); } });
+  await ui.click('file-cast');
+  assert.equal(ui.elements.notice.className, 'notice error');
+  assert.equal(ui.elements.notice.textContent, 'The browser blocked opening this tab.');
+});
+
+test('missing-stream and blob feedback explain player-page scanning and normal downloads', async () => {
+  const ui = await popup({ onRequest: (request) => request.action === 'scan'
+    ? { ok: true, sources: [], blocked: { blob: 1 }, frameWarning: 'Open the player’s own page.' }
+    : normalPopupReply(request) });
+  await ui.click('scan');
+  const feedback = ui.elements['source-summary'].textContent;
+  assert.match(feedback, /player’s own page/);
+  assert.match(feedback, /normal Download button/);
+  assert.match(feedback, /Cast a downloaded video/);
+  assert.match(feedback, /browser-only blob\/data/);
+  assert.match(feedback, /protected playback remains unsupported/);
 });
 
 test('popup enables casting only after a valid stream and renderer exist', async () => {

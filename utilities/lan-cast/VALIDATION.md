@@ -1,22 +1,30 @@
-# Validation — LAN Cast 1.1.1 release candidate
+# Validation — LAN Cast 1.2.0 release candidate
 
-Checked on macOS on 11 October 2026.
+Checked on macOS on 11 October 2026. This record separates automated checks, installed-browser observations, and physical-TV evidence.
 
-## Passed in this release
+## Automated checks
 
-- **41 Python tests**, using Python 3.9.6. Coverage includes native framing and a real helper subprocess, isolated install/launcher/uninstall operations, a local simulated HTTP MediaRenderer, SOAP/DIDL metadata and faults, transport controls/status, discovery parsing, manual address lookup, validation limits, overall HTTP deadlines, forbidden XML characters and malformed saved native-host origins.
-- **37 JavaScript tests**, using the bundled Node runtime. Coverage includes Manifest V3 permissions, trusted popup request boundary, native errors/timeouts, media scanning and canonical duplicate handling, playing-source priority, shadow DOM/restricted frames, DRM/blob filtering, popup request behavior, TV selection/status reset and Opera/Opera GX setup commands.
-- JavaScript syntax checks and macOS launcher shell syntax.
-- No real browser registrations changed by the tests; installer tests use temporary home directories. Network tests use a temporary simulated renderer on `127.0.0.1`.
+- **77 Python utility tests** passed using Python 3.9.6: native framing, simulated renderer, SOAP/DIDL, controls/status, bounded device deadlines, isolated installer/launcher/uninstall, macOS shared Opera registration, helper asset preflight, companion reuse and startup errors, strict local interface URL validation, Host/Origin/CSRF checks, streamed private uploads, replacement/failure cleanup, TV-only serving, HTTP Range and HEAD responses.
+- **47 JavaScript utility tests** passed using the bundled Node runtime: minimal Manifest V3 permissions, trusted popup/native boundary, media scanner and inaccessible embedded-player guidance, helper errors, companion action and returned loopback URL validation, popup behavior, and browser-specific setup.
+- **18 offline publishing/packaging tests** passed. JavaScript and Mac launcher syntax checks passed; the new package contains 31 reviewed files.
+- Tests change no real browser registration; installer tests use temporary home directories. Socket tests use loopback simulated servers.
 
-The release gate also verifies required assets/documents, matching helper/extension versions, narrow permissions, configured funding prerequisites and ZIP integrity. Packaging fixes timestamps and file modes for reproducibility. SHA-256 is supplied beside each built ZIP. Pipeline verification tests are recorded separately in the repository checkpoint.
+## Observed on this Mac and TV
 
-## Still requires real-device verification
+- Updated the existing unpacked Opera GX extension in place to **1.2.0**, preserving its extension ID. The original extension files were backed up before updating.
+- Installed the matching helper modules and Opera’s registration in its documented shared Chrome folder. After reload, the actual Opera GX popup showed **Local helper connected**.
+- The actual plugin’s **Find TVs** command discovered the physical Samsung S90F. Its **Cast a downloaded video** button opened the local companion window in Opera GX.
+- In the companion window, **Find TVs** discovered that TV. The browser file picker selected the already-downloaded MP4; the window copied it locally and enabled casting.
+- The companion’s **Cast to TV** action was accepted. **Check status** reported **PLAYING**, with a progressing position and duration **23:49**. A second episode was then downloaded through its provider’s normal button, verified against its file checksum, selected in the companion, and cast through the same window. Opera’s companion status reported **PLAYING**, with a progressing position and duration **23:39**. This also exercised replacing an active episode.
+- Earlier in the same task, the user explicitly confirmed picture and sound for the same MP4 and TV through the local UPnP file-serving route. That confirmation is distinct from the updated-interface status check.
 
-- Native-host lookup and successful communication after installation inside an actual Opera GX/Opera/Chrome/Edge browser. An earlier local build loaded into Opera GX and displayed a missing-host error; that is not successful end-to-end setup.
-- SSDP discovery and AVTransport actions on an actual home network and physical TV, including a Samsung S90F's model/region/firmware.
-- Playback of intended direct streams and TV codec/format support. Acceptance of commands does not establish actual video playback.
-- Windows/Linux installation on those operating systems. Path/registry logic has automated coverage but no platform runtime confirmation in this release.
+## Limits
+
+- The video provider refused fetching its browser stream outside the player; this release does not bypass that restriction. Use the provider’s normal download option, then choose the downloaded video in the companion.
+- Native communication has been checked in Opera GX on this Mac. Other installed browsers and Windows/Linux runtime installation remain unverified.
+- TV format support varies. This check establishes one MP4 on one physical TV, not every codec, website, subtitle format or TV model. There is no transcoding or separate subtitle support.
+- Commands depend on the renderer. This TV previously rejected a seek command, so this interface does not promise seeking.
+- The computer must remain on and connected while it serves the video. Keep a Mac laptop’s lid open.
 
 ## Repeat checks
 
@@ -27,6 +35,4 @@ python3 -B -m unittest discover -s tests -v
 node --test tests/extension.test.mjs
 ```
 
-For packaging, use `python3 scripts/release.py --node node` from the Seedforge repository root. The integration tests need permission to open a local test socket in a restricted environment.
-
-This is a release candidate. No physical-TV, streaming-service or installed-browser compatibility is implied by these automated checks.
+For a complete release gate, use `python3 scripts/release.py --node node` from the Seedforge repository root. Restricted environments must allow local test sockets. Publication remains separate from local installation and validation.

@@ -1,35 +1,27 @@
-# LAN Cast verified release
-
-Status: [published release candidate](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.1.1-rc), verified anonymously on 11 October 2026. Release commit: `3a227b89892afa7b0cc9ef41601d6fe208bac2fb`. [Live GitHub CI succeeded](https://github.com/nywmeta/seedforge-utilities/actions/runs/38127183565).
+# LAN Cast 1.2.0 release preparation
 
 Repository: `nywmeta/seedforge-utilities`, public, MIT licensed.
+Tag: `lan-cast-v1.2.0-rc`. Publish as a prerelease.
+The previous 1.1.1 release remains recorded in publication.json until the new release passes live verification.
 
-Repository description: Small free MIT-licensed utilities for recurring software frustrations, starting with a direct-stream UPnP/DLNA caster.
+## Title
 
-Tag: `lan-cast-v1.1.1-rc`. Published as a **prerelease**.
-
-Title: LAN Cast 1.1.1 — direct-stream casting release candidate
+LAN Cast 1.2.0 — downloaded episodes to TV, with repaired Opera setup
 
 ## Release body
 
-LAN Cast sends a direct video URL from Opera GX, Opera, Chrome or Edge to a local UPnP/DLNA renderer. It includes a Python standard-library helper for finding TVs and controlling playback. All features are free; source is MIT licensed. No account, subscription or backend is required.
+LAN Cast plays direct video URLs and downloaded video files on a UPnP/DLNA TV. Everything is free and MIT licensed. No account, cloud video upload or runtime package download is required.
 
-This candidate fixes active-video selection and duplicate URLs, known DRM sources resurfacing, stale playback status when changing TVs, slow HTTP device responses and installer/XML validation edge cases.
+This release fixes macOS Opera/Opera GX helper registration and adds a local episode window: find your TV, choose a downloaded video, cast, and control playback. **Cast a downloaded video** opens that window from the plugin; a standalone Mac launcher is also included.
 
-**Physical TV playback and installed-browser native-host communication remain unverified.** Automated tests use a simulated renderer and browser APIs. Windows/Linux installation has automated path coverage but has not been exercised on those platforms.
+A browser-controlling AI assistant can use these visible controls. LAN Cast includes no AI model, API subscription or universal tab-casting service. The included AI-ASSISTANT.md explains the supported workflow.
 
-The TV must expose UPnP AVTransport, fetch the URL independently and support the media format. Browser-only blob URLs, protected video and streams requiring browser login are unsupported. This utility does not mirror tabs or transcode video.
+Verified on this Mac: Opera GX’s helper connection, TV discovery and companion launch. The companion’s file picker, MP4 cast/status and episode replacement were exercised on a physical Samsung S90F; the TV reported PLAYING. The user separately confirmed picture and sound for one MP4 through the local UPnP file-serving route. 77 Python, 47 JavaScript and 18 publishing/packaging tests pass.
 
-Download and extract the ZIP, then read its README for setup and removal. Python 3.9+ is required. The accompanying SHA-256 checksum identifies the checked package.
+The TV must support the file’s container/codecs. Direct URLs must be fetchable independently of the browser. For an unavailable stream, use the provider’s normal download option when permitted. Protected playback, browser-only blobs, transcoding and separate subtitle files are unsupported. Keep the computer on and connected during playback. Windows/Linux and other installed browsers remain runtime-unverified.
 
-Optional support will be added only after the owner confirms a recipient page. Support is never required.
+Download the ZIP, extract it to a permanent folder, and follow README.md. Python3.9+ is required. The checksum identifies the checked package. Optional support is never required; payment links are enabled only after confirming the actual recipient.
 
-## Verify the published release
+## Live verification
 
-The public repository contains the complete source. The prerelease supplies [the checked ZIP](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip) and [its checksum](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip.sha256). To repeat anonymous verification against a locally checked archive, run:
-
-```sh
-python3 scripts/verify_publication.py --repo nywmeta/seedforge-utilities --tag lan-cast-v1.1.1-rc --archive dist/lan-cast-v1.1.1-rc.zip
-```
-
-The verifier uses anonymous GitHub reads, checks every packaged source file at the release commit and downloads both assets. Only a complete successful check updates `publication.json`. Record the verified result in `STATUS.md` afterward. Do not send community announcements without specific authorization and a current rules check.
+After publication, run `scripts/verify_publication.py` against the 1.2.0 ZIP. It must match the public source at the tag commit, downloaded ZIP and checksum before updating publication.json. Record the result in STATUS.md. Community outreach requires separate authorization and a current rules check.

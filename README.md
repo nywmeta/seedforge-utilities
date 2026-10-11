@@ -1,35 +1,47 @@
 # Seedforge utilities
 
-Small free tools for recurring, specific software frustrations. Source code is MIT licensed. Support is optional; every feature works without payment or an account.
+Small, free tools for everyday software frustrations. MIT licensed, with no mandatory account or payment.
 
-## First utility: LAN Cast
+## LAN Cast — play your videos on your TV
 
-[LAN Cast](utilities/lan-cast/README.md) sends a direct video URL from a Chromium browser to a local UPnP/DLNA renderer. It includes a Python standard-library helper, playback controls and explicit setup/removal instructions.
+LAN Cast sends a direct video URL or a downloaded video file to a **UPnP / DLNA TV** on your local network. Use the Opera/Chrome/Edge extension for a direct stream, or its companion window to choose a downloaded episode and control playback. There is no cloud video upload, screen mirroring or runtime package download.
 
-**[Download LAN Cast 1.1.1 release candidate (ZIP)](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip)** · [Release notes](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.1.1-rc) · [SHA-256 checksum](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.1.1-rc/lan-cast-v1.1.1-rc.zip.sha256)
+**[Download LAN Cast 1.2.0 release candidate](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.2.0-rc/lan-cast-v1.2.0-rc.zip)** · [Release notes](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.2.0-rc) · [SHA-256](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.2.0-rc/lan-cast-v1.2.0-rc.zip.sha256)
 
-Extract the ZIP and follow the included setup instructions. Python 3.9+ is required.
+Extract the ZIP, keep it in a permanent folder, and follow the [setup instructions](utilities/lan-cast/README.md). Python **3.9+** is required. On Mac, the package has an installer and a standalone **Cast downloaded video.command** launcher.
 
-**Release candidate:** automated checks cover a simulated renderer. Actual TV playback and installed native-host lookup still require verification. It does not mirror tabs, bypass DRM, transcode video, or transfer browser login credentials.
+### A simple episode workflow
 
-## How we choose work
+1. Download the video through its provider’s normal download option.
+2. Open **LAN Cast → Cast a downloaded video**.
+3. Find your TV, choose the video, then **Cast to TV**.
 
-Read real problem reports, reproduce the problem, check existing free solutions, then make the smallest useful repair or utility. Prefer helping an existing maintained project when that resolves the need. Keep one utility in progress. A release is evidence of delivered software, not proof of users, revenue or compatibility.
+Keep the computer on and connected during playback. The TV must expose UPnP AVTransport and support the video/audio format. Direct links must be independently fetchable by the TV. Protected streams, browser-only blobs, separate subtitle files and transcoding are unsupported.
 
-The [operating workflow](PIPELINE.md), [demand record](research/lan-cast-demand.md), and [results ledger](STATUS.md) explain the decisions and their evidence.
+### Use it with your AI assistant
 
-## Repeatable release checks
+A browser-controlling assistant can use the same visible controls to help cast an identified video to an identified TV. This was demonstrated during development. LAN Cast is the local casting tool; it does not include an AI model, API subscription or an automatic connection to every assistant. See [the assistant guide](utilities/lan-cast/AI-ASSISTANT.md).
 
-Python 3.9+ and Node 22+ are needed for development. End users need only Python and their browser.
+### What we verified
+
+The repaired **Opera GX helper connection**, TV discovery and companion launch were observed on macOS. The companion file picker, MP4 playback requests and episode replacement were exercised against a physical Samsung S90F; its status reported **PLAYING**. The user separately confirmed picture and sound for one of those MP4s through the local UPnP file-serving route. **77 Python, 47 JavaScript and 18 publishing/packaging tests** pass. See [the validation record](utilities/lan-cast/VALIDATION.md) for the scope and remaining platform checks.
+
+This remains a release candidate. Windows/Linux and other installed browsers have not received runtime confirmation; results on one TV do not establish every website or format.
+
+## Optional support
+
+<!-- seedforge-support-start -->
+Optional support is not configured yet. Every feature is free to use and modify.
+<!-- seedforge-support-end -->
+
+## How Seedforge works
+
+We reproduce recurring problems, check existing free solutions, and build the smallest useful repair. A release proves delivery, not users or revenue. The [workflow](PIPELINE.md), [demand record](research/lan-cast-demand.md), and [results ledger](STATUS.md) preserve that evidence.
+
+To repeat release checks from this repository:
 
 ```sh
 python3 scripts/release.py --node node
 ```
 
-The command runs the tests, checks release files and versions, and creates a reproducible utility ZIP plus a SHA-256 checksum in `dist/`. It never publishes or contacts a payment service. GitHub CI runs the same checks only in public repositories using a standard runner, without paid runners, caches or artifact uploads.
-
-## Support
-
-<!-- seedforge-support-start -->
-Optional support is not configured yet. The software is free to use and modify.
-<!-- seedforge-support-end -->
+Python 3.9+ and Node 22+ are development requirements. The command tests and reproducibly packages the utility; it never publishes or spends money. Public GitHub CI uses standard free runners, without artifact/cache storage.

@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 
 HOST_NAME = "com.lancast.bridge"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 END_OF_STREAM = object()
 MAX_INPUT = 64 * 1024
 MAX_OUTPUT = 256 * 1024

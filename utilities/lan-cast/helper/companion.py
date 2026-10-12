@@ -13,7 +13,7 @@ import time
 import urllib.parse
 import webbrowser
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 START_TIMEOUT = 8.0
 
 

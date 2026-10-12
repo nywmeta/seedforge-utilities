@@ -27,7 +27,7 @@ from urllib.parse import unquote
 import host
 
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 MAX_JSON = 16 * 1024
 MAX_UPLOAD = 8 * 1024 ** 3
 CHUNK_SIZE = 64 * 1024
@@ -462,7 +462,7 @@ def control_handler(app):
             elif self.path == prefix + "health":
                 self.json_response(200, {"ok": True, "pid": os.getpid(), "version": VERSION})
             elif self.path == prefix + "api/state" and protected_request(app, self.headers, self.client_address[0], True):
-                app.touch()
+                # Passive window synchronization must not keep an idle helper alive.
                 self.json_response(200, app.state())
             else:
                 self.respond(404)
@@ -579,21 +579,53 @@ UI = r'''<!doctype html>
 <section class="card" aria-labelledby="play-heading"><div class="heading"><span class="number">3</span><h2 id="play-heading">Play on the big screen</h2></div><div class="transport"><div><div id="current">Ready when you are</div><div id="status" class="state">Choose a TV and a video</div><div id="active-tv" class="small"></div></div><button id="cast" class="primary" disabled>Cast to TV</button></div><div class="controls" style="margin-top:18px"><button id="play" disabled>Play</button><button id="pause" disabled>Pause</button><button id="stop" disabled>Stop</button><button id="refresh" disabled>Check status</button></div></section>
 <div id="message" role="status" aria-live="polite"></div><footer>Keep this computer on and connected while the TV plays. On a Mac, LAN Cast keeps it awake while serving the video. No video is sent to a cloud service.<details><summary>Playback limitations</summary><p>This serves a downloaded file; it does not capture a browser tab, download protected streams, or bypass website restrictions. The TV must support the video's container, video and audio codecs. There is no transcoding or separate subtitle support. A successful command means the TV accepted it; check the screen to confirm playback. The interface closes after eight hours without activity; ongoing video transfers count as activity.</p></details></footer>
 </main><script nonce="__NONCE__">
-const config=__CONFIG__; const $=id=>document.getElementById(id); let uploaded=null, casting=false, busy=false, activeLocation=null; const devices=new Map();
+const config=__CONFIG__; const $=id=>document.getElementById(id); let uploaded=null, casting=false, busy=false, activeLocation=null, activeUploadId=null, stateGeneration=0, pollPending=false; const devices=new Map();
 function message(text,error=false){$('message').textContent=text;$('message').classList.toggle('error',error)}
 function update(){ $('cast').disabled=busy||!uploaded||!$('tvs').value;for(const id of ['find','add','file','tvs'])$(id).disabled=busy;for(const id of ['play','pause','stop','refresh'])$(id).disabled=busy||!casting }
 async function api(action,data={}){const response=await fetch(config.prefix+'api/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-LAN-Cast-CSRF':config.csrf},body:JSON.stringify(data)});const result=await response.json();if(!result.ok)throw new Error(result.error?.message||'The command could not be completed.');return result}
 function showTarget(location){activeLocation=location;if(!location){$('active-tv').textContent='';return}let name=devices.get(location)?.name;try{if(!name||name==='Current TV')name='TV at '+new URL(location).hostname}catch(_){}$('active-tv').textContent='Playback controls: '+(name||'current TV')}
-function addDevice(device){if(!device?.location)return;devices.set(device.location,device);let option=Array.from($('tvs').options).find(o=>o.value===device.location);if(!option){option=document.createElement('option');option.value=device.location;$('tvs').append(option)}option.textContent=device.name||'TV';$('tvs').value=device.location;showTarget(activeLocation);update()}
-async function task(fn){if(busy)return;busy=true;update();try{await fn()}catch(error){message(error.message,true)}finally{busy=false;update()}}
+function addDevice(device,select=true){if(!device?.location)return;devices.set(device.location,device);let option=Array.from($('tvs').options).find(o=>o.value===device.location);if(!option){option=document.createElement('option');option.value=device.location;$('tvs').append(option)}option.textContent=device.name||'TV';if(select||!$('tvs').value)$('tvs').value=device.location;showTarget(activeLocation);update()}
+async function task(fn){if(busy)return;stateGeneration++;busy=true;update();try{await fn()}catch(error){message(error.message,true)}finally{busy=false;update()}}
 $('find').onclick=()=>task(async()=>{message('Looking for TVs…');const result=await api('discover');for(const device of result.devices||[])addDevice(device);message(result.devices?.length?'Choose your TV above.':'No TV found. Try its local IP address or device-description URL.');});
 $('add').onclick=()=>task(async()=>{message('Checking the TV…');const result=await api('addDevice',{address:$('address').value.trim()});addDevice(result.device);message('TV added.');});
 $('tvs').onchange=update;
 $('file').onchange=()=>task(async()=>{const file=$('file').files[0];if(!file)return;message('Copying the video locally…');$('progress').hidden=false;$('progress').value=0;const result=await new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',config.prefix+'api/upload');xhr.setRequestHeader('X-LAN-Cast-CSRF',config.csrf);xhr.setRequestHeader('X-Filename',encodeURIComponent(file.name));xhr.upload.onprogress=e=>{if(e.lengthComputable)$('progress').value=e.loaded/e.total*100};xhr.onerror=()=>reject(new Error('The local copy was interrupted.'));xhr.onload=()=>{try{const result=JSON.parse(xhr.responseText);result.ok?resolve(result):reject(new Error(result.error?.message||'The video could not be copied.'))}catch(_){reject(new Error('The local interface did not respond.'))}};xhr.send(file)});uploaded=result;$('file-note').textContent=result.name+' · '+(result.size/1024/1024).toFixed(1)+' MB · ready';$('progress').value=100;message('Video ready. Cast when you are ready.');});
-$('cast').onclick=()=>task(async()=>{message('Sending the video to your TV…');await api('cast',{location:$('tvs').value,uploadId:uploaded.uploadId});casting=true;showTarget($('tvs').value);$('current').textContent=uploaded.name;$('status').textContent='Cast accepted — check your TV';message('The TV accepted the playback command.');});
-for(const command of ['play','pause','stop'])$(command).onclick=()=>task(async()=>{await api(command);$('status').textContent=command==='stop'?'Stopped':command==='pause'?'Pause accepted':'Play accepted';if(command==='stop'){casting=false;showTarget(null)}message('TV command accepted.');});
+$('cast').onclick=()=>task(async()=>{message('Sending the video to your TV…');await api('cast',{location:$('tvs').value,uploadId:uploaded.uploadId});casting=true;activeUploadId=uploaded.uploadId;showTarget($('tvs').value);$('current').textContent=uploaded.name;$('status').textContent='Cast accepted — check your TV';message('The TV accepted the playback command.');});
+for(const command of ['play','pause','stop'])$(command).onclick=()=>task(async()=>{await api(command);$('status').textContent=command==='stop'?'Stopped — use Cast to TV to restart':command==='pause'?'Pause accepted':'Play accepted';if(command==='stop'){casting=false;activeUploadId=null;showTarget(null)}message('TV command accepted.');});
 $('refresh').onclick=()=>task(async()=>{const state=await api('status');const format=n=>Number.isFinite(n)?Math.floor(n/60)+':'+String(n%60).padStart(2,'0'):'';$('status').textContent=state.transportState+(Number.isFinite(state.position)?' · '+format(state.position)+(Number.isFinite(state.duration)?' / '+format(state.duration):''):'');message('TV status refreshed.');});
-(async()=>{try{const response=await fetch(config.prefix+'api/state',{headers:{'X-LAN-Cast-CSRF':config.csrf}});const state=await response.json();uploaded=state.file;casting=!!state.casting;if(state.location){addDevice({location:state.location,name:'Current TV'});showTarget(state.location)}if(uploaded)$('file-note').textContent=uploaded.name+' · ready';if(state.casting){$('current').textContent=state.casting.name;$('status').textContent='A video is being served — check status'}update()}catch(_){message('The local interface is no longer running. Open it again from LAN Cast.',true)}})();
+function applyState(state){
+  if(uploaded?.uploadId!==state.file?.uploadId)$('file').value='';
+  uploaded=state.file;
+  $('file-note').textContent=uploaded?uploaded.name+' · ready':'MP4 is usually the most compatible choice. Maximum 8 GB.';
+  const nextId=state.casting?.uploadId||null, nextLocation=state.location||null;
+  const changed=activeUploadId!==nextId||activeLocation!==nextLocation||casting!==!!state.casting;
+  casting=!!state.casting;activeUploadId=nextId;
+  if(nextLocation&&!devices.has(nextLocation))addDevice({location:nextLocation,name:'Current TV'},false);
+  showTarget(nextLocation);
+  if(changed){
+    $('current').textContent=state.casting?state.casting.name:'Ready when you are';
+    $('status').textContent=state.casting?'A video is being served — check status':'No video is being served';
+  }
+  update();
+}
+async function syncState(initial=false){
+  if(busy||pollPending||(!initial&&document.hidden))return;
+  pollPending=true;const generation=stateGeneration, controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),8000);
+  try{
+    const response=await fetch(config.prefix+'api/state',{headers:{'X-LAN-Cast-CSRF':config.csrf},signal:controller.signal});
+    const state=await response.json();
+    if(busy||generation!==stateGeneration)return;
+    if(!response.ok||!state||state.ok!==true||!['file','casting','location'].every(key=>key in state))throw new Error('Invalid state');
+    applyState(state);
+  }catch(_){
+    if(initial&&!busy&&generation===stateGeneration)message('The local interface is no longer running. Open it again from LAN Cast.',true);
+  }finally{clearTimeout(timeout);pollPending=false}
+}
+syncState(true);
+setInterval(()=>syncState(),5000);
+window.addEventListener('focus',()=>syncState());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncState()});
 </script></body></html>'''
 
 

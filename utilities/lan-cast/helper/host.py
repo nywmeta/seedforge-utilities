@@ -25,7 +25,9 @@ from dataclasses import dataclass
 
 
 HOST_NAME = "com.lancast.bridge"
-VERSION = "1.2.1"
+VERSION = "1.2.2"
+LOCAL_FILE_FEATURES = "DLNA.ORG_OP=01;DLNA.ORG_CI=0"
+MAX_LOCAL_FILE = 8 * 1024 * 1024 * 1024
 END_OF_STREAM = object()
 MAX_INPUT = 64 * 1024
 MAX_OUTPUT = 256 * 1024
@@ -366,14 +368,17 @@ def add_device(address):
     raise BridgeError("DEVICE_NOT_FOUND", "The TV did not advertise a usable renderer at that IP. Wake the TV or enter its full HTTP device-description URL, including the advertised port and path.")
 
 
-def build_metadata(media_url, title, mime_type):
-    # Use the general http-get protocolInfo without claiming an unverified DLNA
-    # codec profile, byte seeking, or transcoding capability for the source.
+def build_metadata(media_url, title, mime_type, local_file_size=None):
+    # Only the companion's unchanged, byte-range-capable files get DLNA seek
+    # information. Arbitrary browser URLs keep their general protocolInfo.
     didl = ET.Element("DIDL-Lite", {"xmlns": DIDL_NS, "xmlns:dc": DC_NS, "xmlns:upnp": UPNP_NS})
     item = ET.SubElement(didl, "item", {"id": "0", "parentID": "-1", "restricted": "1"})
     ET.SubElement(item, "dc:title").text = title
     ET.SubElement(item, "upnp:class").text = "object.item.audioItem" if mime_type.lower().startswith("audio/") else "object.item.videoItem"
-    ET.SubElement(item, "res", {"protocolInfo": "http-get:*:%s:*" % mime_type}).text = media_url
+    attributes = {"protocolInfo": "http-get:*:%s:%s" % (mime_type, LOCAL_FILE_FEATURES if local_file_size is not None else "*")}
+    if local_file_size is not None:
+        attributes["size"] = str(local_file_size)
+    ET.SubElement(item, "res", attributes).text = media_url
     return ET.tostring(didl, encoding="unicode")
 
 
@@ -475,6 +480,13 @@ def handle_request(request):
             mime_type = request.get("mimeType") or mimetypes.guess_type(urllib.parse.urlsplit(media_url).path)[0] or "video/mp4"
             if not isinstance(mime_type, str) or len(mime_type) > 128 or not MIME_RE.fullmatch(mime_type):
                 raise BridgeError("INVALID_REQUEST", "Provide a valid video MIME type.")
+            local_file_size = request.get("localFileSize")
+            if "localFileSize" in request:
+                if type(local_file_size) is not int or not 1 <= local_file_size <= MAX_LOCAL_FILE:
+                    raise BridgeError("INVALID_REQUEST", "Provide a valid local file size.")
+                endpoint = validate_local_url(media_url)
+                if endpoint.scheme != "http":
+                    raise BridgeError("INVALID_REQUEST", "Local file seeking requires a private HTTP file server.")
         elif action == "control":
             command = require_string(request, "command", maximum=16)
             if command not in ("play", "pause", "stop", "seek"):
@@ -487,7 +499,7 @@ def handle_request(request):
         if action == "cast":
             soap_action(renderer, "SetAVTransportURI", {
                 "InstanceID": 0, "CurrentURI": media_url,
-                "CurrentURIMetaData": build_metadata(media_url, title, mime_type),
+                "CurrentURIMetaData": build_metadata(media_url, title, mime_type, local_file_size),
             })
             soap_action(renderer, "Play", {"InstanceID": 0, "Speed": "1"})
             return {"ok": True, "state": "CAST_SENT"}

@@ -27,7 +27,7 @@ from urllib.parse import unquote
 import host
 
 
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 MAX_JSON = 16 * 1024
 MAX_UPLOAD = 8 * 1024 ** 3
 CHUNK_SIZE = 64 * 1024
@@ -220,7 +220,8 @@ def media_handler(upload, file_fd, token_path, stop, touch):
             length = max(0, last - first + 1)
             self.send_response(206 if ranges else 200)
             for key, value in {"Content-Type": upload.mime, "Content-Length": str(length),
-                               "Accept-Ranges": "bytes", "Connection": "close", "Cache-Control": "no-store"}.items():
+                               "Accept-Ranges": "bytes", "contentFeatures.dlna.org": host.LOCAL_FILE_FEATURES,
+                               "transferMode.dlna.org": "Streaming", "Connection": "close", "Cache-Control": "no-store"}.items():
                 self.send_header(key, value)
             if ranges:
                 self.send_header("Content-Range", "bytes %s-%s/%s" % (first, last, upload.size))
@@ -355,9 +356,17 @@ class App:
 
     def command(self, action, data):
         expected = {"discover": set(), "addDevice": {"address"}, "cast": {"location", "uploadId"},
-                    "play": set(), "pause": set(), "stop": set(), "status": set()}
+                    "play": set(), "pause": set(), "stop": set(), "status": set(),
+                    "seek": {"position"}, "skip": {"offset"}}
         if action not in expected or not isinstance(data, dict) or set(data) != expected[action]:
             raise FileCastError("The playback request is invalid.")
+        if action == "seek":
+            try:
+                host.numeric_value(data, "position", None, 0, 35999999)
+            except host.BridgeError:
+                raise FileCastError("Enter a valid playback time.")
+        if action == "skip" and (type(data["offset"]) not in (int, float) or data["offset"] not in (-30, 30)):
+            raise FileCastError("Skip must be back or forward 30 seconds.")
         self.touch()
         if action == "discover":
             result = self.bridge({"action": "discover", "timeout": 4.0})
@@ -391,7 +400,7 @@ class App:
                 try:
                     result = self.bridge({"action": "cast", "location": data["location"],
                                           "mediaUrl": candidate.url, "title": self.staged.name,
-                                          "mimeType": self.staged.mime})
+                                          "mimeType": self.staged.mime, "localFileSize": self.staged.size})
                     if not result.get("ok"):
                         candidate.close()
                         return result
@@ -410,6 +419,22 @@ class App:
                 raise FileCastError("Cast a video to the TV first.")
             if action == "status":
                 return self.bridge({"action": "status", "location": self.location})
+            if action in ("seek", "skip"):
+                position = data.get("position")
+                if action == "skip":
+                    state = self.bridge({"action": "status", "location": self.location})
+                    if not state.get("ok"):
+                        return state
+                    try:
+                        position = host.numeric_value(state, "position", None, 0, 35999999)
+                    except host.BridgeError:
+                        raise FileCastError("The TV did not report its current time. Use Jump to time instead.")
+                    position = max(0, min(35999999, position + data["offset"]))
+                    duration = state.get("duration")
+                    if type(duration) in (int, float) and 0 < duration <= 35999999:
+                        position = min(position, max(0, duration - 1))
+                return self.bridge({"action": "control", "location": self.location,
+                                    "command": "seek", "position": position})
             result = self.bridge({"action": "control", "location": self.location, "command": action})
             if action == "stop" and result.get("ok"):
                 stopped = self.active
@@ -576,12 +601,12 @@ UI = r'''<!doctype html>
 <h1>Your episode.<br>Your TV.</h1><p class="intro">Choose a video you have already downloaded, then play it on a UPnP / DLNA TV on the same local network.</p>
 <section class="card" aria-labelledby="tv-heading"><div class="heading"><span class="number">1</span><h2 id="tv-heading">Choose your TV</h2></div><div class="row"><label class="sr" for="tvs">Available TVs</label><select id="tvs"><option value="">Find a TV to get started</option></select><button id="find">Find TVs</button></div><div class="manual"><label for="address">Or add it manually</label><div class="row"><input id="address" placeholder="TV IP or full device-description URL" autocomplete="off" spellcheck="false"><button id="add">Add TV</button></div><p class="small">Wake the TV and enable its media-renderer / DLNA setting if it does not appear.</p></div></section>
 <section class="card" aria-labelledby="file-heading"><div class="heading"><span class="number">2</span><h2 id="file-heading">Choose a downloaded episode</h2></div><div class="file"><label for="file">Video file</label><input id="file" type="file" accept=".mp4,.m4v,.mov,.ts,.mkv,.webm,.avi"><progress id="progress" value="0" max="100" hidden aria-label="Copy progress"></progress><p class="small" id="file-note">MP4 is usually the most compatible choice. Maximum 8 GB.</p></div><p class="small">A temporary private copy stays on this computer. Your TV fetches it directly over your local network.</p></section>
-<section class="card" aria-labelledby="play-heading"><div class="heading"><span class="number">3</span><h2 id="play-heading">Play on the big screen</h2></div><div class="transport"><div><div id="current">Ready when you are</div><div id="status" class="state">Choose a TV and a video</div><div id="active-tv" class="small"></div></div><button id="cast" class="primary" disabled>Cast to TV</button></div><div class="controls" style="margin-top:18px"><button id="play" disabled>Play</button><button id="pause" disabled>Pause</button><button id="stop" disabled>Stop</button><button id="refresh" disabled>Check status</button></div></section>
+<section class="card" aria-labelledby="play-heading"><div class="heading"><span class="number">3</span><h2 id="play-heading">Play on the big screen</h2></div><div class="transport"><div><div id="current">Ready when you are</div><div id="status" class="state">Choose a TV and a video</div><div id="active-tv" class="small"></div></div><button id="cast" class="primary" disabled>Cast to TV</button></div><div class="controls" style="margin-top:18px"><button id="play" disabled>Play</button><button id="pause" disabled>Pause</button><button id="stop" disabled>Stop</button><button id="refresh" disabled>Check status</button></div><div class="controls" style="margin-top:14px"><button id="backward" disabled>Back 30 seconds</button><button id="forward" disabled>Forward 30 seconds</button></div><label for="seek-time" style="display:block;margin-top:18px">Jump to time</label><div class="row"><input id="seek-time" placeholder="12:30 or 1:02:03" autocomplete="off" spellcheck="false" disabled aria-describedby="seek-note"><button id="seek" disabled>Go</button></div><p class="small" id="seek-note">Use minutes:seconds or hours:minutes:seconds. Seeking depends on your TV and video format.</p></section>
 <div id="message" role="status" aria-live="polite"></div><footer>Keep this computer on and connected while the TV plays. On a Mac, LAN Cast keeps it awake while serving the video. No video is sent to a cloud service.<details><summary>Playback limitations</summary><p>This serves a downloaded file; it does not capture a browser tab, download protected streams, or bypass website restrictions. The TV must support the video's container, video and audio codecs. There is no transcoding or separate subtitle support. A successful command means the TV accepted it; check the screen to confirm playback. The interface closes after eight hours without activity; ongoing video transfers count as activity.</p></details></footer>
 </main><script nonce="__NONCE__">
 const config=__CONFIG__; const $=id=>document.getElementById(id); let uploaded=null, casting=false, busy=false, activeLocation=null, activeUploadId=null, stateGeneration=0, pollPending=false; const devices=new Map();
 function message(text,error=false){$('message').textContent=text;$('message').classList.toggle('error',error)}
-function update(){ $('cast').disabled=busy||!uploaded||!$('tvs').value;for(const id of ['find','add','file','tvs'])$(id).disabled=busy;for(const id of ['play','pause','stop','refresh'])$(id).disabled=busy||!casting }
+function update(){ $('cast').disabled=busy||!uploaded||!$('tvs').value;for(const id of ['find','add','file','tvs'])$(id).disabled=busy;for(const id of ['play','pause','stop','refresh','backward','forward','seek-time','seek'])$(id).disabled=busy||!casting }
 async function api(action,data={}){const response=await fetch(config.prefix+'api/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-LAN-Cast-CSRF':config.csrf},body:JSON.stringify(data)});const result=await response.json();if(!result.ok)throw new Error(result.error?.message||'The command could not be completed.');return result}
 function showTarget(location){activeLocation=location;if(!location){$('active-tv').textContent='';return}let name=devices.get(location)?.name;try{if(!name||name==='Current TV')name='TV at '+new URL(location).hostname}catch(_){}$('active-tv').textContent='Playback controls: '+(name||'current TV')}
 function addDevice(device,select=true){if(!device?.location)return;devices.set(device.location,device);let option=Array.from($('tvs').options).find(o=>o.value===device.location);if(!option){option=document.createElement('option');option.value=device.location;$('tvs').append(option)}option.textContent=device.name||'TV';if(select||!$('tvs').value)$('tvs').value=device.location;showTarget(activeLocation);update()}
@@ -590,9 +615,15 @@ $('find').onclick=()=>task(async()=>{message('Looking for TVs…');const result=
 $('add').onclick=()=>task(async()=>{message('Checking the TV…');const result=await api('addDevice',{address:$('address').value.trim()});addDevice(result.device);message('TV added.');});
 $('tvs').onchange=update;
 $('file').onchange=()=>task(async()=>{const file=$('file').files[0];if(!file)return;message('Copying the video locally…');$('progress').hidden=false;$('progress').value=0;const result=await new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();xhr.open('POST',config.prefix+'api/upload');xhr.setRequestHeader('X-LAN-Cast-CSRF',config.csrf);xhr.setRequestHeader('X-Filename',encodeURIComponent(file.name));xhr.upload.onprogress=e=>{if(e.lengthComputable)$('progress').value=e.loaded/e.total*100};xhr.onerror=()=>reject(new Error('The local copy was interrupted.'));xhr.onload=()=>{try{const result=JSON.parse(xhr.responseText);result.ok?resolve(result):reject(new Error(result.error?.message||'The video could not be copied.'))}catch(_){reject(new Error('The local interface did not respond.'))}};xhr.send(file)});uploaded=result;$('file-note').textContent=result.name+' · '+(result.size/1024/1024).toFixed(1)+' MB · ready';$('progress').value=100;message('Video ready. Cast when you are ready.');});
-$('cast').onclick=()=>task(async()=>{message('Sending the video to your TV…');await api('cast',{location:$('tvs').value,uploadId:uploaded.uploadId});casting=true;activeUploadId=uploaded.uploadId;showTarget($('tvs').value);$('current').textContent=uploaded.name;$('status').textContent='Cast accepted — check your TV';message('The TV accepted the playback command.');});
-for(const command of ['play','pause','stop'])$(command).onclick=()=>task(async()=>{await api(command);$('status').textContent=command==='stop'?'Stopped — use Cast to TV to restart':command==='pause'?'Pause accepted':'Play accepted';if(command==='stop'){casting=false;activeUploadId=null;showTarget(null)}message('TV command accepted.');});
-$('refresh').onclick=()=>task(async()=>{const state=await api('status');const format=n=>Number.isFinite(n)?Math.floor(n/60)+':'+String(n%60).padStart(2,'0'):'';$('status').textContent=state.transportState+(Number.isFinite(state.position)?' · '+format(state.position)+(Number.isFinite(state.duration)?' / '+format(state.duration):''):'');message('TV status refreshed.');});
+$('cast').onclick=()=>task(async()=>{message('Sending the video to your TV…');await api('cast',{location:$('tvs').value,uploadId:uploaded.uploadId});casting=true;activeUploadId=uploaded.uploadId;$('seek-time').value='';showTarget($('tvs').value);$('current').textContent=uploaded.name;$('status').textContent='Cast accepted — check your TV';message('The TV accepted the playback command.');});
+for(const command of ['play','pause','stop'])$(command).onclick=()=>task(async()=>{await api(command);$('status').textContent=command==='stop'?'Stopped — use Cast to TV to restart':command==='pause'?'Pause accepted':'Play accepted';if(command==='stop'){casting=false;activeUploadId=null;$('seek-time').value='';showTarget(null)}message('TV command accepted.');});
+function parseSeekTime(text){const value=text.trim();if(!/^(?:[0-9]+:[0-5][0-9]|[0-9]+:[0-5][0-9]:[0-5][0-9])$/.test(value))throw new Error('Enter a time such as 12:30 or 1:02:03.');const parts=value.split(':').map(Number);const seconds=parts.reduce((total,part)=>total*60+part,0);if(!Number.isSafeInteger(seconds)||seconds>35999999)throw new Error('That playback time is too large.');return seconds}
+async function refreshStatus(){const state=await api('status');const format=n=>Number.isFinite(n)?Math.floor(n/60)+':'+String(Math.floor(n)%60).padStart(2,'0'):'';$('status').textContent=state.transportState+(Number.isFinite(state.position)?' · '+format(state.position)+(Number.isFinite(state.duration)?' / '+format(state.duration):''):'');return state}
+$('refresh').onclick=()=>task(async()=>{await refreshStatus();message('TV status refreshed.');});
+async function jump(action,data){await api(action,data);$('status').textContent='Seek accepted — check your TV';message('Seek accepted. Check the TV to confirm the new position.');try{await refreshStatus()}catch(_){message('Seek accepted. The TV has not reported its new position; check the TV.')}}
+$('seek').onclick=()=>task(()=>jump('seek',{position:parseSeekTime($('seek-time').value)}));
+for(const [id,offset] of [['backward',-30],['forward',30]])$(id).onclick=()=>task(()=>jump('skip',{offset}));
+$('seek-time').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();$('seek').onclick()}};
 function applyState(state){
   if(uploaded?.uploadId!==state.file?.uploadId)$('file').value='';
   uploaded=state.file;
@@ -603,6 +634,7 @@ function applyState(state){
   if(nextLocation&&!devices.has(nextLocation))addDevice({location:nextLocation,name:'Current TV'},false);
   showTarget(nextLocation);
   if(changed){
+    $('seek-time').value='';
     $('current').textContent=state.casting?state.casting.name:'Ready when you are';
     $('status').textContent=state.casting?'A video is being served — check status':'No video is being served';
   }

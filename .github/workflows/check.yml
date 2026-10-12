@@ -1,5 +1,14 @@
 name: Check free utilities
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      verify_tag:
+        description: 'Optional published LAN Cast tag to verify anonymously'
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -22,3 +31,10 @@ jobs:
           node-version: '22'
           package-manager-cache: false
       - run: python -B scripts/release.py --node node
+      - name: Verify published release anonymously
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_tag != '' }}
+        env:
+          LAN_CAST_VERIFY_TAG: ${{ inputs.verify_tag }}
+        run: |
+          python -B scripts/verify_publication.py --repo "$GITHUB_REPOSITORY" --tag "$LAN_CAST_VERIFY_TAG" --archive "dist/$LAN_CAST_VERIFY_TAG.zip"
+          python -B -c 'from pathlib import Path; print(Path("publication.json").read_text())'

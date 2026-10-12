@@ -1,5 +1,14 @@
 # LAN Cast changes
 
+## 1.2.2 release candidate — 12 October 2026
+
+- Advertise byte-range seeking and unchanged content for downloaded files in both DLNA resource metadata and HTTP responses. Include the exact file size. Arbitrary browser stream URLs retain general metadata; no codec profile or HTTP time-seek capability is claimed.
+- Add **Back 30 seconds**, **Forward 30 seconds**, and **Jump to time** (`12:30` or `1:02:03`) to the downloaded-video window. Playback controls target the active TV, even when another TV is selected for the next cast.
+- Relative jumps read the TV's current position and clamp to the known video bounds. Invalid times are rejected before sending a command. Rejected seeking leaves the serving session and entered time available.
+- Add 18 Python regression tests and eight UI test groups, including timestamp cases. Retain the 1.2.1 window-synchronization fix.
+
+On a physical Samsung S90F, the original file session offered only Pause/Stop. After the repaired stream was cast, the TV advertised seeking and fast-forward, a time jump changed its reported position, and the user confirmed the physical remote could seek. This establishes that tested downloaded MP4 on that TV; other TVs, formats and remote streams remain unverified. A paused-session replacement initially returned UPnP 701; stopping the session and casting again succeeded. See VALIDATION.md.
+
 ## 1.2.1 release candidate — 12 October 2026
 
 - Refresh the downloaded-video window's local casting state every five seconds while visible, and when returning to it. Starting or stopping a cast in another window updates playback controls without a reload.

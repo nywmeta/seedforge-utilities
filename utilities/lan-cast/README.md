@@ -1,6 +1,6 @@
 # Lan Cast
 
-**1.2.1 release candidate · MIT licensed · free to use.**
+**1.2.2 release candidate · MIT licensed · free to use.**
 
 A browser extension for Opera GX, Opera, Chrome and Microsoft Edge that sends a direct web video URL to a UPnP/DLNA TV on your local network. A companion window also lets you choose a downloaded video and play it on the TV, with no cloud service or account.
 
@@ -31,7 +31,7 @@ A browser-controlling assistant can operate LAN Cast’s visible controls, as de
 1. Download the video through its provider’s normal download option.
 2. Open **Cast a downloaded video** in the LAN Cast popup. On a Mac you can also double-click **Cast downloaded video.command** in this package, even before browser setup.
 3. Choose **Find TVs**, select your TV, then use **Video file** to choose the episode from your computer. If discovery misses the TV, enter its IP or full device-description URL.
-4. Wait for the local copy to finish, then choose **Cast to TV**. Use **Play**, **Pause**, **Stop**, and **Check status** in the window.
+4. Wait for the local copy to finish, then choose **Cast to TV**. Use **Play**, **Pause**, **Stop**, and **Check status** in the window. Use **Back 30 seconds**, **Forward 30 seconds**, or enter `12:30` / `1:02:03` in **Jump to time**, then press **Go**.
 
 The computer must stay on and connected throughout playback. On a Mac the helper temporarily prevents idle sleep while serving; keep the lid open. MP4 is a useful first choice, but the TV must support the video and audio codecs. Separate subtitle files and transcoding are not supported. Up to 8 GB per file; a private temporary copy is removed on normal helper exit or when the video is replaced; an abnormal termination can leave private temporary copies. The interface shuts down after eight hours without activity, including video transfers.
 
@@ -62,6 +62,10 @@ Linux users can run the `python3` command with `--browser chrome`, `edge`, `oper
 
 If automatic discovery misses the TV, use the manual connection option with the TV's IPv4 address (for example `192.168.1.50`). If it does not respond to unicast discovery, enter its full UPnP device-description URL, including the correct port and path. An IP alone is not a guaranteed fallback: the helper does not guess manufacturer-specific ports.
 
+## Seeking and fast-forward
+
+Downloaded files advertise byte-range seeking to the TV. Physical remote seeking was confirmed on a Samsung S90F with one downloaded MP4. TV and format support varies; remote web URLs keep their original general metadata. The time controls send UPnP seeking commands and report acceptance separately from the observed position. Some TVs move to a nearby keyframe or change playback state after seeking; use Play/Pause as needed. If the TV does not report its current time, the 30-second buttons cannot calculate a jump; use **Jump to time** instead.
+
 ## TV compatibility
 
 This extension requires a TV to advertise a **UPnP MediaRenderer with an AVTransport service**. A TV advertising DLNA alone does not prove it accepts remote playback commands. The helper checks for AVTransport before allowing a connection.
@@ -84,6 +88,8 @@ The extension sends a direct stream URL to the TV. For downloaded files, the com
 - **No TVs:** Confirm the TV is on, both devices are on the same network, and guest Wi-Fi/client isolation is disabled. A VPN or firewall can block SSDP discovery (UDP port 1900). Allow the browser/Python local-network access if your operating system asks. Router internet port forwarding is unnecessary.
 - **TV found but cast fails:** Try a direct MP4 URL accessible without logging in, check the TV's permission prompt, and inspect the error shown in Lan Cast. The TV may reject a format or playback action.
 - **Pause / seek rejected:** These actions depend on the renderer and stream. Live streams commonly cannot seek.
+- **UPnP 701 while replacing a paused video:** Stop the current session, then use **Cast to TV** again. This recovery was needed once on the tested TV.
+- **Old helper window after updating:** Close it and reopen **Cast a downloaded video** so the new helper serves the file with updated seek information; reload the extension after updating its source folder.
 - **Video not found:** Start the page video once, scan again, or paste a known direct stream URL. Browser internal pages, restricted pages, and some cross-origin frames cannot be scanned.
 
 ## Remove

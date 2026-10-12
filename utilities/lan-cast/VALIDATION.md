@@ -1,6 +1,18 @@
-# Validation — LAN Cast 1.2.1 release candidate
+# Validation — LAN Cast 1.2.2 release candidate
 
-Checked on macOS on 12 October 2026. This record separates the current maintenance patch's checks from installed-browser and physical-TV observations for 1.2.0.
+Checked on macOS on 12 October 2026. This record separates current seeking checks from earlier installation and maintenance evidence.
+
+## 1.2.2 seeking checks
+
+- The complete local utility suites passed: **96 Python tests and 80 JavaScript tests**. The release gate additionally runs **18 publishing/packaging tests**, syntax checks and reproducible packaging. Test sockets were explicitly permitted for the complete local run.
+- Eighteen new Python tests cover exact-size DIDL metadata, unchanged remote-stream metadata, malformed capability inputs before network access, HTTP GET/HEAD/Range feature parity, active-TV targeting, strict seeking values, fresh-position relative jumps, start/end clamping, missing positions and preservation of the serving session on command failures.
+- Eight new companion UI groups (with timestamp subcases) cover strict time entry, malformed input without a request, bounded skip payloads, busy/no-cast controls, SOAP rejection, status failure after an accepted command and clearing an entered time when the active video changes. UI tests simulate browser requests.
+- Existing helper modules were backed up and updated to 1.2.2 on this Mac. The downloaded-video window was reopened in Opera GX and loaded the same already-downloaded MP4 through its local upload API. The original file was retained.
+- Before the repair, the physical Samsung S90F session's resource used general protocolInfo and omitted size; its available transport actions were Pause/Stop. Its service description nevertheless advertised seeking modes.
+- After recasting the repaired stream, the resource included exact size and `DLNA.ORG_OP=01;DLNA.ORG_CI=0`. The TV advertised Seek, DLNA byte/time seeking and playback-speed actions. A REL_TIME request to 3:40 succeeded; the subsequent TV position was about 3:37, consistent with seeking to a nearby frame. The visible Opera window's **Jump to time** was also exercised and displayed that observed position.
+- The user explicitly confirmed that the **physical TV remote now permits seeking/fast-forward** for this video. This is actual device evidence, separate from command acknowledgement and simulated tests.
+- One attempt to replace a paused session initially returned **UPnP 701** during startup. The candidate file session was closed as designed on failure; stopping TV playback and casting again succeeded. No automatic recovery from that startup fault is claimed. Seeking can affect playback state on this TV; no pause-preservation guarantee is made.
+- No arbitrary codec profile, universal-TV support, remote-stream seeking or HTTP time-seek support is claimed. This remains a release candidate.
 
 ## 1.2.1 maintenance checks
 
@@ -32,7 +44,7 @@ Checked on macOS on 12 October 2026. This record separates the current maintenan
 - The video provider refused fetching its browser stream outside the player; this release does not bypass that restriction. Use the provider’s normal download option, then choose the downloaded video in the companion.
 - Native communication has been checked in Opera GX on this Mac. Other installed browsers and Windows/Linux runtime installation remain unverified.
 - TV format support varies. This check establishes one MP4 on one physical TV, not every codec, website, subtitle format or TV model. There is no transcoding or separate subtitle support.
-- Commands depend on the renderer. This TV previously rejected a seek command, so this interface does not promise seeking.
+- Commands depend on the renderer and source. Seeking is now confirmed only for the tested local MP4 on the Samsung S90F; other TVs, files and web streams remain unverified.
 - The computer must remain on and connected while it serves the video. Keep a Mac laptop’s lid open.
 
 ## Repeat checks

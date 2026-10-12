@@ -1,29 +1,27 @@
-# LAN Cast 1.2.0 verified release
+# LAN Cast 1.2.1 verified release
 
-Repository: `nywmeta/seedforge-utilities`, public, MIT licensed.
-Tag: `lan-cast-v1.2.0-rc`, published as a prerelease.
-[Public release and downloads](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.2.0-rc).
+Repository: `nywmeta/seedforge-utilities`, public and MIT licensed.
+Tag: `lan-cast-v1.2.1-rc`, published as a prerelease.
+[Release and downloads](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.2.1-rc).
 
 ## Title
 
-LAN Cast 1.2.0 — downloaded episodes to TV, with repaired Opera setup
+LAN Cast 1.2.1 — playback controls stay in sync
 
 ## Release body
 
-LAN Cast plays direct video URLs and downloaded video files on a UPnP/DLNA TV. Everything is free and MIT licensed. No account, cloud video upload or runtime package download is required.
+When LAN Cast's downloaded-video window was open more than once, a window could retain disabled controls after another started a cast, or enabled controls after another stopped it. This maintenance release refreshes the shared local casting state every five seconds while visible and when returning to a window.
 
-This release fixes macOS Opera/Opera GX helper registration and adds a local episode window: find your TV, choose a downloaded video, cast, and control playback. **Cast a downloaded video** opens that window from the plugin; a standalone Mac launcher is also included.
+The staged episode, playing episode and playback TV stay distinct. A delayed state response cannot overwrite a completed Cast, Stop or file copy. Passive refreshes keep the existing eight-hour idle timeout. After Stop closes the serving session, use **Cast to TV** to restart.
 
-A browser-controlling AI assistant can use these visible controls. LAN Cast includes no AI model, API subscription or universal tab-casting service. The included AI-ASSISTANT.md explains the supported workflow.
+The complete [free GitHub release gate](https://github.com/nywmeta/seedforge-utilities/actions/runs/38216963159) passed: **78 Python, 56 JavaScript and 18 publishing/packaging tests**. The 32-file ZIP matches the checked CI build byte for byte. Nine companion UI regression tests cover the reproduced window-state problem.
 
-Verified on this Mac: Opera GX’s helper connection, TV discovery and companion launch. The companion’s file picker, MP4 cast/status and episode replacement were exercised on a physical Samsung S90F; the TV reported PLAYING. The user separately confirmed picture and sound for one MP4 through the local UPnP file-serving route. 77 Python, 47 JavaScript and 18 publishing/packaging tests pass.
+This remains a prerelease. The patch has not been installed over an active helper or tested on a physical TV; earlier Opera GX and Samsung S90F evidence belongs to 1.2.0. The user's earlier intermittent button problem recovered before this patch, and its cause remains unconfirmed. TV command, format and platform limitations in VALIDATION.md still apply.
 
-The TV must support the file’s container/codecs. Direct URLs must be fetchable independently of the browser. For an unavailable stream, use the provider’s normal download option when permitted. Protected playback, browser-only blobs, transcoding and separate subtitle files are unsupported. Keep the computer on and connected during playback. Windows/Linux and other installed browsers remain runtime-unverified.
-
-Download the ZIP, extract it to a permanent folder, and follow README.md. Python3.9+ is required. The checksum identifies the checked package. Optional support is never required; payment links are enabled only after confirming the actual recipient.
+Free, MIT licensed, local UPnP/DLNA casting. Python **3.9+** is required. Download the ZIP and follow README.md. All features remain free; optional support is currently disabled.
 
 ## Live verification
 
-Anonymous verification passed on 11 October 2026 at 20:06 UTC. Every packaged source file at tag commit `dd7cc79dd2f36d71a6b3cf80f8b0ef9f4f466741`, the public MIT license, downloaded ZIP and checksum matched the checked local build. SHA-256: `10df44ab83de76e4996f97746e821ad126d9816b9831c9aedd0c54b743d44142`. `publication.json` records the verified result.
+The actual `scripts/verify_publication.py` completed anonymously on the free public CI runner at `2026-10-12T07:24:05.750651+00:00`. Every packaged source file at `4e41da978c2091473c55aef06ddbd912967db741`, the repository MIT license, downloaded ZIP and checksum matched the checked build. `publication.json` records the result. SHA-256: `55890d18ee7ed104011dafcd453b6ea53dec6bfa14ca9121e52bf9f0d1100472`.
 
-[GitHub release checks passed](https://github.com/nywmeta/seedforge-utilities/actions/runs/38170683017) at the tag commit. Community outreach requires separate authorization and a current rules check.
+[Verification run](https://github.com/nywmeta/seedforge-utilities/actions/runs/38217504583). The runner checked out the release tag and ran the full gate before verification. No paid services, artifact/cache storage or additional token privileges were used.

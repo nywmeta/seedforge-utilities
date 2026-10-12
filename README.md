@@ -6,7 +6,7 @@ Small, free tools for everyday software frustrations. MIT licensed, with no mand
 
 LAN Cast sends a direct video URL or a downloaded video file to a **UPnP / DLNA TV** on your local network. Use the Opera/Chrome/Edge extension for a direct stream, or its companion window to choose a downloaded episode and control playback. There is no cloud video upload, screen mirroring or runtime package download.
 
-**[Download LAN Cast 1.2.0 release candidate](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.2.0-rc/lan-cast-v1.2.0-rc.zip)** · [Release notes](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.2.0-rc) · [SHA-256](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.2.0-rc/lan-cast-v1.2.0-rc.zip.sha256)
+**[Download LAN Cast 1.2.1 release candidate](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.2.1-rc/lan-cast-v1.2.1-rc.zip)** · [Release notes](https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.2.1-rc) · [SHA-256](https://github.com/nywmeta/seedforge-utilities/releases/download/lan-cast-v1.2.1-rc/lan-cast-v1.2.1-rc.zip.sha256)
 
 Extract the ZIP, keep it in a permanent folder, and follow the [setup instructions](utilities/lan-cast/README.md). Python **3.9+** is required. On Mac, the package has an installer and a standalone **Cast downloaded video.command** launcher.
 
@@ -24,7 +24,7 @@ A browser-controlling assistant can use the same visible controls to help cast a
 
 ### What we verified
 
-The repaired **Opera GX helper connection**, TV discovery and companion launch were observed on macOS. The companion file picker, MP4 playback requests and episode replacement were exercised against a physical Samsung S90F; its status reported **PLAYING**. The user separately confirmed picture and sound for one of those MP4s through the local UPnP file-serving route. **77 Python, 47 JavaScript and 18 publishing/packaging tests** pass. See [the validation record](utilities/lan-cast/VALIDATION.md) for the scope and remaining platform checks.
+With **1.2.0**, the repaired **Opera GX helper connection**, TV discovery and companion launch were observed on macOS. The companion file picker, MP4 playback requests and episode replacement were exercised against a physical Samsung S90F; its status reported **PLAYING**. The user separately confirmed picture and sound for one of those MP4s through the local UPnP file-serving route. **1.2.1** repairs stale controls across companion windows, with nine simulated UI regression checks. Its complete GitHub release gate passed **78 Python, 56 JavaScript and 18 publishing/packaging tests**; the public source and downloads were verified anonymously. The patch has not yet received a new installed-browser or physical-TV check. See [the validation record](utilities/lan-cast/VALIDATION.md) for the scope and remaining platform checks.
 
 This remains a release candidate. Windows/Linux and other installed browsers have not received runtime confirmation; results on one TV do not establish every website or format.
 

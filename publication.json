@@ -1,9 +1,9 @@
 {
   "state": "published",
   "repository_url": "https://github.com/nywmeta/seedforge-utilities",
-  "commit": "dd7cc79dd2f36d71a6b3cf80f8b0ef9f4f466741",
-  "tag": "lan-cast-v1.2.0-rc",
-  "release_url": "https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.2.0-rc",
-  "verified_at": "2026-10-11T20:06:39.457901+00:00",
-  "sha256": "10df44ab83de76e4996f97746e821ad126d9816b9831c9aedd0c54b743d44142"
+  "commit": "4e41da978c2091473c55aef06ddbd912967db741",
+  "tag": "lan-cast-v1.2.1-rc",
+  "release_url": "https://github.com/nywmeta/seedforge-utilities/releases/tag/lan-cast-v1.2.1-rc",
+  "verified_at": "2026-10-12T07:24:05.750651+00:00",
+  "sha256": "55890d18ee7ed104011dafcd453b6ea53dec6bfa14ca9121e52bf9f0d1100472"
 }

@@ -75,6 +75,19 @@ class AppCase(unittest.TestCase):
 
 
 class RequestBoundaryTests(AppCase):
+    def test_passive_state_read_does_not_extend_idle_lifetime(self):
+        handler_type = file_cast.control_handler(self.app)
+        handler = handler_type.__new__(handler_type)
+        handler.path = '/' + self.app.token + '/api/state'
+        handler.headers = headers([('Host', '127.0.0.1:40500'), ('X-LAN-Cast-CSRF', self.app.csrf)])
+        handler.client_address = ('127.0.0.1', 12345)
+        handler.json_response = Mock()
+        self.app.last_activity = 123.0
+        handler.do_GET()
+        handler.json_response.assert_called_once_with(200, self.app.state())
+        self.assertEqual(self.app.last_activity, 123.0)
+        self.bridge.assert_not_called()
+
     def valid_headers(self):
         return [('Host', '127.0.0.1:40500'), ('Origin', self.app.origin),
                 ('X-LAN-Cast-CSRF', self.app.csrf)]

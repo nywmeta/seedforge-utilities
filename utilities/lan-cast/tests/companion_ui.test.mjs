@@ -175,3 +175,131 @@ test('failed state snapshots preserve the current cast and rejected commands res
   assert.match(view.elements.message.textContent, /UPnP 701/);
   assert.equal(view.elements.pause.disabled, false);
 });
+
+const seekControls = ['backward', 'forward', 'seek-time', 'seek'];
+const playbackControls = ['play', 'pause', 'stop', 'refresh', ...seekControls];
+const postRequests = view => view.requests.filter(request => request.options.method === 'POST').map(request => ({
+  action: request.url.split('/').at(-1), data: JSON.parse(request.options.body),
+}));
+const tvStatus = position => ({ ok: true, transportState: 'PLAYING', position, duration: 35999999 });
+
+test('timestamp entry sends strict whole-second positions, including zero and the supported maximum', async t => {
+  for (const [timestamp, seconds] of [['0:00', 0], ['12:30', 750], ['1:02:03', 3723], ['9999:59:59', 35999999]]) {
+    await t.test(timestamp, async () => {
+      let requested;
+      const view = await windowView({ onState: async () => state(episodeA, episodeA, tvA),
+        onRequest: async (action, data) => {
+          if (action === 'seek') { requested = data.position; return { ok: true, state: 'SEEK_SENT', position: requested }; }
+          return tvStatus(requested);
+        } });
+      view.elements['seek-time'].value = timestamp;
+      await view.click('seek');
+      assert.deepEqual(postRequests(view), [{ action: 'seek', data: { position: seconds } }, { action: 'status', data: {} }]);
+      assert.match(view.elements.message.textContent, /seek.*accepted/i);
+      assert.equal(view.elements.play.disabled, false);
+    });
+  }
+});
+
+test('malformed or out-of-range timestamps report an error before sending any playback request', async t => {
+  for (const timestamp of ['', '750', '1:2', '1:2:03', '1:60', '1:60:00', '-1:00', '1.5:00',
+    '12:30 trailing', 'NaN', 'Infinity', '10000:00:00']) {
+    await t.test(JSON.stringify(timestamp), async () => {
+      const view = await windowView({ onState: async () => state(episodeA, episodeA, tvA) });
+      view.elements['seek-time'].value = timestamp;
+      await view.click('seek');
+      assert.deepEqual(postRequests(view), []);
+      assert.equal(view.elements.message.classes.has('error'), true);
+      assert.ok(view.elements.message.textContent.length > 0);
+      assert.equal(view.elements['seek-time'].value, timestamp);
+      assert.equal(view.elements.pause.disabled, false);
+    });
+  }
+});
+
+test('relative jumps send only bounded offsets and preserve the active TV when another TV is selected', async () => {
+  const view = await windowView({ onState: async () => state(episodeB, episodeA, tvA),
+    onRequest: async action => action === 'status' ? tvStatus(120) : { ok: true, state: 'SEEK_SENT', position: 120 } });
+  vm.runInContext(`addDevice({ location: ${JSON.stringify(tvB)}, name: 'Other TV' })`, view.context);
+  await view.click('backward');
+  await view.click('forward');
+  assert.deepEqual(postRequests(view), [
+    { action: 'skip', data: { offset: -30 } }, { action: 'status', data: {} },
+    { action: 'skip', data: { offset: 30 } }, { action: 'status', data: {} },
+  ]);
+  assert.equal(view.elements.tvs.value, tvB);
+  assert.match(view.elements['active-tv'].textContent, /192\.168\.1\.50/);
+  assert.equal(view.elements.current.textContent, episodeA.name);
+});
+
+test('seek controls follow casting and busy state and ignore a concurrent jump', async () => {
+  let current = state(), resolveSeek;
+  const view = await windowView({ onState: async () => current,
+    onRequest: async action => action === 'seek'
+      ? new Promise(resolve => { resolveSeek = resolve; }) : tvStatus(750) });
+  for (const id of seekControls) assert.equal(view.elements[id].disabled, true, id);
+  current = state(episodeA, episodeA, tvA);
+  await view.poll();
+  for (const id of seekControls) assert.equal(view.elements[id].disabled, false, id);
+  view.elements['seek-time'].value = '12:30';
+  const pending = view.click('seek');
+  await flush();
+  for (const id of playbackControls) assert.equal(view.elements[id].disabled, true, id);
+  await view.click('forward');
+  assert.deepEqual(postRequests(view), [{ action: 'seek', data: { position: 750 } }]);
+  resolveSeek({ ok: true, state: 'SEEK_SENT', position: 750 });
+  await pending;
+  for (const id of playbackControls) assert.equal(view.elements[id].disabled, false, id);
+  current = state(episodeA);
+  await view.focus();
+  for (const id of seekControls) assert.equal(view.elements[id].disabled, true, id);
+});
+
+test('TV seek rejection preserves the active session, entered time, and usable controls', async () => {
+  const view = await windowView({ onState: async () => state(episodeA, episodeA, tvA),
+    onRequest: async () => ({ ok: false, error: { code: 'SOAP_FAULT', message: 'UPnP 710: Seek mode not supported' } }) });
+  view.elements['seek-time'].value = '12:30';
+  await view.click('seek');
+  assert.deepEqual(postRequests(view), [{ action: 'seek', data: { position: 750 } }]);
+  assert.match(view.elements.message.textContent, /UPnP 710/);
+  assert.equal(view.elements.message.classes.has('error'), true);
+  assert.equal(view.elements['seek-time'].value, '12:30');
+  assert.equal(view.elements.current.textContent, episodeA.name);
+  assert.match(view.elements['active-tv'].textContent, /192\.168\.1\.50/);
+  for (const id of playbackControls) assert.equal(view.elements[id].disabled, false, id);
+});
+
+test('a failed status check after accepted seek retains acknowledgement of the successful command', async () => {
+  const view = await windowView({ onState: async () => state(episodeA, episodeA, tvA),
+    onRequest: async action => action === 'seek' ? { ok: true, state: 'SEEK_SENT', position: 750 }
+      : { ok: false, error: { message: 'The TV did not report its position.' } } });
+  view.elements['seek-time'].value = '12:30';
+  await view.click('seek');
+  assert.deepEqual(postRequests(view), [{ action: 'seek', data: { position: 750 } }, { action: 'status', data: {} }]);
+  assert.match(view.elements.message.textContent, /seek.*accepted/i);
+  assert.equal(view.elements['seek-time'].value, '12:30');
+  assert.equal(view.elements.current.textContent, episodeA.name);
+  for (const id of playbackControls) assert.equal(view.elements[id].disabled, false, id);
+});
+
+test('staging a new file preserves the entered time until the active cast changes', async () => {
+  let current = state(episodeA, episodeA, tvA);
+  const view = await windowView({ onState: async () => current });
+  view.elements['seek-time'].value = '12:30';
+  current = state(episodeB, episodeA, tvA);
+  await view.poll();
+  assert.equal(view.elements['seek-time'].value, '12:30');
+  current = state(episodeB, episodeB, tvA);
+  await view.poll();
+  assert.equal(view.elements['seek-time'].value, '');
+  assert.equal(view.elements.current.textContent, episodeB.name);
+});
+
+test('casting a staged replacement clears the time entered for the previous episode', async () => {
+  const view = await windowView({ onState: async () => state(episodeB, episodeA, tvA) });
+  view.elements['seek-time'].value = '12:30';
+  await view.click('cast');
+  assert.equal(view.elements['seek-time'].value, '');
+  assert.equal(view.elements.current.textContent, episodeB.name);
+  assert.deepEqual(postRequests(view), [{ action: 'cast', data: { location: tvA, uploadId: episodeB.uploadId } }]);
+});

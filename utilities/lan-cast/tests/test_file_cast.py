@@ -8,7 +8,8 @@ from pathlib import Path
 import sys
 import threading
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
+import xml.etree.ElementTree as ET
 
 
 HELPER = Path(__file__).resolve().parents[1] / 'helper'
@@ -137,8 +138,23 @@ class RequestBoundaryTests(AppCase):
                 self.app.command('cast', {'location': location, 'uploadId': 'unused'})
         self.bridge.assert_not_called()
 
+    def test_seek_and_skip_require_an_active_cast_before_contacting_a_tv(self):
+        for action, data in (('seek', {'position': 30}), ('skip', {'offset': 30})):
+            with self.subTest(action=action), self.assertRaisesRegex(file_cast.FileCastError, 'Cast a video'):
+                self.app.command(action, data)
+        self.bridge.assert_not_called()
+
 
 class UploadLifecycleTests(AppCase):
+    def test_cast_passes_exact_local_file_size_without_exposing_its_path(self):
+        payload = b'local episode bytes'
+        uploaded = self.upload(payload)
+        self.cast(uploaded)
+        request = self.bridge.call_args.args[0]
+        self.assertEqual(request['localFileSize'], len(payload))
+        self.assertEqual(request['mediaUrl'], self.sessions[0].url)
+        self.assertNotIn(str(self.app.staged.path), json.dumps(request))
+
     def test_upload_reads_bounded_chunks_and_exposes_no_local_path(self):
         payload = b'a' * (file_cast.CHUNK_SIZE * 2 + 17)
         stream = RecordingStream(payload)
@@ -267,6 +283,197 @@ class UploadLifecycleTests(AppCase):
         self.app.close()
         self.assertTrue(self.sessions[0].closed)
         self.assertFalse(temporary.exists())
+
+
+class PlaybackPositionTests(AppCase):
+    def setUp(self):
+        super().setUp()
+        self.cast(self.upload())
+        self.bridge.reset_mock()
+
+    def assert_active_preserved(self):
+        self.assertIs(self.app.active, self.sessions[0])
+        self.assertFalse(self.sessions[0].closed)
+        self.assertEqual(self.app.location, TV_LOCATION)
+        self.assertTrue(self.sessions[0].upload.path.exists())
+        self.app.release_awake.assert_not_called()
+
+    def test_absolute_seek_uses_active_tv_without_playing_or_recasting(self):
+        self.upload(b'next episode', 'next.mp4')
+        for position in (0, 0.5, 35999999):
+            with self.subTest(position=position):
+                self.bridge.reset_mock()
+                self.assertTrue(self.app.command('seek', {'position': position})['ok'])
+                self.bridge.assert_called_once_with({'action': 'control', 'location': TV_LOCATION,
+                                                     'command': 'seek', 'position': position})
+                self.assert_active_preserved()
+                self.assertEqual(self.app.staged.name, 'next.mp4')
+
+    def test_invalid_seek_and_skip_inputs_fail_before_bridge_calls(self):
+        invalid = [
+            ('seek', {'position': value})
+            for value in (None, True, False, '30', [], {}, -1, 36000000,
+                          float('nan'), float('inf'), float('-inf'))
+        ] + [
+            ('seek', {}), ('seek', {'position': 30, 'location': 'http://192.168.1.51/device.xml'}),
+            ('skip', {}), ('skip', {'offset': 30, 'position': 0}),
+            *[('skip', {'offset': value}) for value in (None, True, False, '30', 0, 15, 60,
+                                                       float('nan'), float('inf'))],
+        ]
+        for action, data in invalid:
+            with self.subTest(action=action, data=data), self.assertRaises(file_cast.FileCastError):
+                self.app.command(action, data)
+        self.bridge.assert_not_called()
+        self.assert_active_preserved()
+
+    def test_skip_reads_fresh_active_tv_position_and_clamps_to_available_bounds(self):
+        for offset, position, duration, expected in (
+            (30, 60, 300, 90), (-30, 60, 300, 30), (-30, 12, 300, 0),
+            (30, 90, 100, 99), (30, 0, 1, 0), (30, 0, 0.5, 0),
+            (30, 35999990, None, 35999999),
+        ):
+            with self.subTest(offset=offset, position=position, duration=duration):
+                self.bridge.reset_mock()
+                self.bridge.side_effect = [
+                    {'ok': True, 'position': position, 'duration': duration}, {'ok': True},
+                ]
+                self.assertTrue(self.app.command('skip', {'offset': offset})['ok'])
+                self.assertEqual(self.bridge.call_args_list, [
+                    call({'action': 'status', 'location': TV_LOCATION}),
+                    call({'action': 'control', 'location': TV_LOCATION,
+                          'command': 'seek', 'position': expected}),
+                ])
+                self.assert_active_preserved()
+
+    def test_unknown_or_invalid_duration_does_not_invent_a_seek_limit(self):
+        for duration in (None, 0, -1, True, False, '100', float('nan'), float('inf'), 36000000):
+            with self.subTest(duration=duration):
+                self.bridge.reset_mock()
+                self.bridge.side_effect = [
+                    {'ok': True, 'position': 60, 'duration': duration}, {'ok': True},
+                ]
+                self.app.command('skip', {'offset': 30})
+                self.assertEqual(self.bridge.call_args.args[0]['position'], 90)
+
+    def test_skip_without_a_valid_reported_position_preserves_session_and_never_seeks(self):
+        for position in (None, True, False, '60', -1, 36000000,
+                         float('nan'), float('inf'), float('-inf')):
+            with self.subTest(position=position):
+                self.bridge.reset_mock()
+                self.bridge.side_effect = None
+                self.bridge.return_value = {'ok': True, 'position': position, 'duration': 300}
+                with self.assertRaises(file_cast.FileCastError):
+                    self.app.command('skip', {'offset': 30})
+                self.bridge.assert_called_once_with({'action': 'status', 'location': TV_LOCATION})
+                self.assert_active_preserved()
+
+    def test_status_and_seek_faults_remain_errors_without_stopping_or_playing(self):
+        fault = {'ok': False, 'error': {'code': 'SOAP_FAULT', 'message': 'UPnP 710: seek rejected'}}
+        self.bridge.return_value = fault
+        self.assertEqual(self.app.command('seek', {'position': 30}), fault)
+        self.bridge.assert_called_once_with({'action': 'control', 'location': TV_LOCATION,
+                                             'command': 'seek', 'position': 30})
+        self.assert_active_preserved()
+        self.bridge.reset_mock()
+        self.assertEqual(self.app.command('skip', {'offset': 30}), fault)
+        self.bridge.assert_called_once_with({'action': 'status', 'location': TV_LOCATION})
+        self.assert_active_preserved()
+        self.bridge.reset_mock()
+        self.bridge.side_effect = [{'ok': True, 'position': 60, 'duration': 300}, fault]
+        self.assertEqual(self.app.command('skip', {'offset': -30}), fault)
+        self.assertEqual(self.bridge.call_args_list, [
+            call({'action': 'status', 'location': TV_LOCATION}),
+            call({'action': 'control', 'location': TV_LOCATION, 'command': 'seek', 'position': 30}),
+        ])
+        self.assert_active_preserved()
+
+
+class MediaHeaderTests(unittest.TestCase):
+    """Exercise real file responses without binding a listener or contacting a TV."""
+
+    def setUp(self):
+        self.temporary = file_cast.tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        path = Path(self.temporary.name) / 'episode.mp4'
+        self.payload = b'0123456789abcdef'
+        path.write_bytes(self.payload)
+        self.upload = file_cast.Upload('test', path, 'episode.mp4', len(self.payload), 'video/mp4')
+        self.token_path = '/simulated-tv-token/video.mp4'
+        self.stop = threading.Event()
+        self.touch = Mock()
+
+    def response(self, method='GET', path=None, request_headers=()):
+        handler_type = file_cast.media_handler(self.upload, None, self.token_path, self.stop, self.touch)
+        handler = handler_type.__new__(handler_type)
+        handler.path = self.token_path if path is None else path
+        handler.command = method
+        handler.headers = headers(request_headers)
+        handler.wfile = io.BytesIO()
+        handler.send_response = Mock()
+        handler.send_header = Mock()
+        handler.end_headers = Mock()
+        handler.serve(method != 'HEAD')
+        return (handler.send_response.call_args.args[0],
+                dict(item.args for item in handler.send_header.call_args_list), handler.wfile.getvalue())
+
+    def test_full_and_range_get_head_advertise_the_same_features_as_local_didl(self):
+        metadata = ET.fromstring(file_cast.host.build_metadata(
+            'http://192.168.1.2:40501/local/video.mp4', 'Episode', 'video/mp4',
+            local_file_size=self.upload.size))
+        resource = metadata.find('.//{%s}res' % file_cast.host.DIDL_NS)
+        advertised = resource.attrib['protocolInfo'].split(':', 3)[3]
+        self.assertEqual(advertised, 'DLNA.ORG_OP=01;DLNA.ORG_CI=0')
+        for method, use_range in (('GET', False), ('HEAD', False), ('GET', True), ('HEAD', True)):
+            with self.subTest(method=method, use_range=use_range):
+                request = [('getcontentFeatures.dlna.org', '1')]
+                if use_range:
+                    request.append(('Range', 'bytes=2-5'))
+                status, values, payload = self.response(method, request_headers=request)
+                self.assertEqual(status, 206 if use_range else 200)
+                self.assertEqual(values['contentFeatures.dlna.org'], advertised)
+                self.assertEqual(values['transferMode.dlna.org'], 'Streaming')
+                self.assertEqual(values['Accept-Ranges'], 'bytes')
+                self.assertEqual(values['Content-Length'], '4' if use_range else '16')
+                self.assertEqual(payload, b'' if method == 'HEAD' else self.payload[2:6] if use_range else self.payload)
+                if use_range:
+                    self.assertEqual(values['Content-Range'], 'bytes 2-5/16')
+                else:
+                    self.assertNotIn('Content-Range', values)
+
+    def test_dlna_features_are_fixed_not_echoed_from_request_headers(self):
+        status, values, _ = self.response(request_headers=[
+            ('getcontentFeatures.dlna.org', 'not-a-feature'),
+            ('contentFeatures.dlna.org', 'DLNA.ORG_OP=11;DLNA.ORG_CI=1'),
+            ('transferMode.dlna.org', 'unverified-client-value'),
+        ])
+        self.assertEqual(status, 200)
+        self.assertEqual(values['contentFeatures.dlna.org'], 'DLNA.ORG_OP=01;DLNA.ORG_CI=0')
+        self.assertEqual(values['transferMode.dlna.org'], 'Streaming')
+
+    def test_invalid_ranges_reveal_no_body_or_success_features_and_do_not_touch(self):
+        for ranges in ([('Range', 'bytes=99-')], [('Range', 'bytes=5-2')],
+                       [('Range', 'bytes=0-1,4-5')], [('Range', 'bytes=0-1'), ('Range', 'bytes=2-3')]):
+            with self.subTest(ranges=ranges):
+                status, values, payload = self.response(request_headers=ranges)
+                self.assertEqual(status, 416)
+                self.assertEqual(values['Content-Range'], 'bytes */16')
+                self.assertNotIn('contentFeatures.dlna.org', values)
+                self.assertEqual(payload, b'')
+        self.touch.assert_not_called()
+
+    def test_wrong_token_and_stopped_media_reveal_no_features_or_body(self):
+        for path in ('/wrong/video.mp4', self.token_path + '?extra=1', '/..' + self.token_path):
+            with self.subTest(path=path):
+                status, values, payload = self.response(path=path)
+                self.assertEqual(status, 404)
+                self.assertNotIn('contentFeatures.dlna.org', values)
+                self.assertEqual(payload, b'')
+        self.stop.set()
+        status, values, payload = self.response()
+        self.assertEqual(status, 404)
+        self.assertNotIn('contentFeatures.dlna.org', values)
+        self.assertEqual(payload, b'')
+        self.touch.assert_not_called()
 
 
 class ControlHttpTests(AppCase):
@@ -403,9 +610,13 @@ class MediaHttpTests(unittest.TestCase):
         self.assertEqual(payload, self.payload)
         self.assertEqual(values['Content-Type'], 'video/mp4')
         self.assertEqual(values['Accept-Ranges'], 'bytes')
+        self.assertEqual(values['contentFeatures.dlna.org'], 'DLNA.ORG_OP=01;DLNA.ORG_CI=0')
+        self.assertEqual(values['transferMode.dlna.org'], 'Streaming')
         status, values, payload = self.request('HEAD')
         self.assertEqual(status, 200)
         self.assertEqual(values['Content-Length'], str(len(self.payload)))
+        self.assertEqual(values['contentFeatures.dlna.org'], 'DLNA.ORG_OP=01;DLNA.ORG_CI=0')
+        self.assertEqual(values['transferMode.dlna.org'], 'Streaming')
         self.assertEqual(payload, b'')
 
     def test_single_suffix_open_ended_and_clamped_ranges(self):
@@ -417,6 +628,8 @@ class MediaHttpTests(unittest.TestCase):
                 self.assertEqual(payload, self.payload[start:end + 1])
                 self.assertEqual(values['Content-Range'], 'bytes %s-%s/16' % (start, end))
                 self.assertEqual(values['Content-Length'], str(end - start + 1))
+                self.assertEqual(values['contentFeatures.dlna.org'], 'DLNA.ORG_OP=01;DLNA.ORG_CI=0')
+                self.assertEqual(values['transferMode.dlna.org'], 'Streaming')
 
     def test_unsatisfiable_and_multiple_ranges_are_rejected(self):
         for ranges in [['bytes=99-'], ['bytes=5-2'], ['bytes=-0'], ['bytes=0-1,4-5'],

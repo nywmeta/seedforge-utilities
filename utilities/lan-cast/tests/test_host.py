@@ -210,6 +210,7 @@ class RendererTests(unittest.TestCase):
         resource = item.find("{%s}res" % host.DIDL_NS)
         self.assertEqual(resource.text, media)
         self.assertEqual(resource.attrib["protocolInfo"], "http-get:*:video/mp4:*")
+        self.assertNotIn("size", resource.attrib)
         self.assertEqual(requests[1]["arguments"], {"InstanceID": "0", "Speed": "1"})
 
     def test_urlbase_and_relative_control(self):
@@ -392,6 +393,115 @@ class ValidationTests(unittest.TestCase):
     def test_audio_metadata_uses_audio_class(self):
         metadata = ET.fromstring(host.build_metadata("https://example.test/song.mp3", "Song", "audio/mpeg"))
         self.assertEqual(metadata.find("{%s}item/{%s}class" % (host.DIDL_NS, host.UPNP_NS)).text, "object.item.audioItem")
+
+
+class LocalFileMetadataTests(unittest.TestCase):
+    """Known local-file capabilities must not leak into arbitrary URL casts."""
+
+    location = "http://192.168.1.50:1234/device.xml"
+    media = "http://192.168.1.2:40501/private-token/video.mp4"
+    features = "DLNA.ORG_OP=01;DLNA.ORG_CI=0"
+    maximum_size = 8 * 1024 ** 3
+
+    def resource(self, metadata):
+        document = ET.fromstring(metadata)
+        return document.find("{%s}item/{%s}res" % (host.DIDL_NS, host.DIDL_NS))
+
+    def test_known_local_file_metadata_preserves_size_uri_and_escaping(self):
+        title = 'Episode <one> & "two"'
+        media = self.media + "?token=one&quality=original"
+        for size in (1, 2 ** 32 + 7, self.maximum_size):
+            with self.subTest(size=size):
+                metadata = host.build_metadata(media, title, "video/mp4", local_file_size=size)
+                document = ET.fromstring(metadata)
+                item = document.find("{%s}item" % host.DIDL_NS)
+                self.assertEqual(item.find("{%s}title" % host.DC_NS).text, title)
+                self.assertEqual(item.find("{%s}class" % host.UPNP_NS).text, "object.item.videoItem")
+                resource = self.resource(metadata)
+                self.assertEqual(resource.text, media)
+                self.assertEqual(resource.attrib, {
+                    "protocolInfo": "http-get:*:video/mp4:" + self.features,
+                    "size": str(size),
+                })
+        self.assertEqual(host.LOCAL_FILE_FEATURES, self.features)
+
+    def test_url_without_known_file_size_keeps_generic_metadata(self):
+        for media in (self.media, "https://example.test/video.mp4"):
+            with self.subTest(media=media):
+                resource = self.resource(host.build_metadata(media, "Episode", "video/mp4"))
+                self.assertEqual(resource.text, media)
+                self.assertEqual(resource.attrib, {"protocolInfo": "http-get:*:video/mp4:*"})
+                with mock.patch.object(host, "load_renderer", return_value=object()), \
+                        mock.patch.object(host, "soap_action", return_value={}) as soap:
+                    result = host.handle_request({"action": "cast", "location": self.location,
+                                                  "mediaUrl": media, "mimeType": "video/mp4"})
+                self.assertTrue(result["ok"])
+                sent = self.resource(soap.call_args_list[0].args[2]["CurrentURIMetaData"])
+                self.assertEqual(sent.attrib, resource.attrib)
+
+    def test_private_http_cast_advertises_exact_local_file_size(self):
+        for media, size in ((self.media, 1), ("http://10.0.0.2/video.mp4", 2 ** 32 + 7),
+                            ("http://172.16.0.2:8080/video.mp4", self.maximum_size)):
+            with self.subTest(media=media, size=size):
+                renderer = object()
+                with mock.patch.object(host, "load_renderer", return_value=renderer) as load, \
+                        mock.patch.object(host, "soap_action", return_value={}) as soap, \
+                        mock.patch.object(host, "fetch_http", side_effect=AssertionError("No network in this test")):
+                    result = host.handle_request({"action": "cast", "location": self.location,
+                                                  "mediaUrl": media, "mimeType": "video/mp4",
+                                                  "localFileSize": size})
+                self.assertEqual(result, {"ok": True, "state": "CAST_SENT"})
+                load.assert_called_once_with(self.location)
+                self.assertEqual([call.args[1] for call in soap.call_args_list], ["SetAVTransportURI", "Play"])
+                set_uri = soap.call_args_list[0].args[2]
+                self.assertEqual(set_uri["CurrentURI"], media)
+                resource = self.resource(set_uri["CurrentURIMetaData"])
+                self.assertEqual(resource.text, media)
+                self.assertEqual(resource.attrib, {
+                    "protocolInfo": "http-get:*:video/mp4:" + self.features,
+                    "size": str(size),
+                })
+                self.assertEqual(soap.call_args_list[1].args, (renderer, "Play", {"InstanceID": 0, "Speed": "1"}))
+
+    def test_invalid_local_file_size_fails_before_renderer_or_network(self):
+        for size in (None, 0, -1, self.maximum_size + 1, True, False, 1.0,
+                     float(self.maximum_size), float("nan"), float("inf"), "1", [], {}):
+            with self.subTest(size=size):
+                with mock.patch.object(host, "load_renderer") as load, \
+                        mock.patch.object(host, "soap_action") as soap, \
+                        mock.patch.object(host, "fetch_http") as fetch:
+                    result = host.handle_request({"action": "cast", "location": self.location,
+                                                  "mediaUrl": self.media, "localFileSize": size})
+                self.assertFalse(result["ok"])
+                self.assertEqual(result["error"]["code"], "INVALID_REQUEST")
+                load.assert_not_called()
+                soap.assert_not_called()
+                fetch.assert_not_called()
+
+    def test_local_file_claim_on_https_or_nonlocal_url_fails_before_network(self):
+        for media in ("https://example.test/video.mp4", "https://192.168.1.2/video.mp4",
+                      "http://example.test/video.mp4", "http://8.8.8.8/video.mp4",
+                      "http://100.64.0.1/video.mp4", "http://localhost/video.mp4"):
+            with self.subTest(media=media):
+                with mock.patch.object(host, "load_renderer") as load, \
+                        mock.patch.object(host, "soap_action") as soap, \
+                        mock.patch.object(host, "fetch_http") as fetch:
+                    result = host.handle_request({"action": "cast", "location": self.location,
+                                                  "mediaUrl": media, "localFileSize": 123})
+                self.assertFalse(result["ok"])
+                self.assertIn("code", result["error"])
+                load.assert_not_called()
+                soap.assert_not_called()
+                fetch.assert_not_called()
+
+    def test_rejected_relative_time_seek_remains_an_error(self):
+        error = host.BridgeError("SOAP_FAULT", "UPnP 710: Seek mode not supported")
+        with mock.patch.object(host, "load_renderer", return_value=object()), \
+                mock.patch.object(host, "soap_action", side_effect=error) as soap:
+            result = host.handle_request({"action": "control", "location": self.location,
+                                          "command": "seek", "position": 30})
+        self.assertEqual(result, {"ok": False, "error": {"code": "SOAP_FAULT", "message": error.message}})
+        self.assertEqual(soap.call_args.args[1:], ("Seek", {"InstanceID": 0, "Unit": "REL_TIME", "Target": "00:00:30"}))
 
 
 class FrameTests(unittest.TestCase):

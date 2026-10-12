@@ -1,6 +1,6 @@
 # Lan Cast
 
-**1.2.0 release candidate · MIT licensed · free to use.**
+**1.2.1 release candidate · MIT licensed · free to use.**
 
 A browser extension for Opera GX, Opera, Chrome and Microsoft Edge that sends a direct web video URL to a UPnP/DLNA TV on your local network. A companion window also lets you choose a downloaded video and play it on the TV, with no cloud service or account.
 
@@ -79,6 +79,7 @@ The extension sends a direct stream URL to the TV. For downloaded files, the com
 
 ## Troubleshooting
 
+- **Downloaded-video controls look out of date:** Visible companion windows refresh their shared casting state every five seconds and when you return to a window. After **Stop**, use **Cast to TV** to play again; Stop closes the temporary file-serving session.
 - **Helper not found / forbidden:** Check the copied extension ID, the browser selected during installation, and that Python still exists. Re-run the installer, then reload the extension.
 - **No TVs:** Confirm the TV is on, both devices are on the same network, and guest Wi-Fi/client isolation is disabled. A VPN or firewall can block SSDP discovery (UDP port 1900). Allow the browser/Python local-network access if your operating system asks. Router internet port forwarding is unnecessary.
 - **TV found but cast fails:** Try a direct MP4 URL accessible without logging in, check the TV's permission prompt, and inspect the error shown in Lan Cast. The TV may reject a format or playback action.

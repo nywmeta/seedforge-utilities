@@ -1,5 +1,15 @@
 # LAN Cast changes
 
+## 1.2.1 release candidate — 12 October 2026
+
+- Refresh the downloaded-video window's local casting state every five seconds while visible, and when returning to it. Starting or stopping a cast in another window updates playback controls without a reload.
+- Keep the staged video, active video and playback TV distinct. Preserve a different TV selection and detailed playback status while synchronizing.
+- Discard state replies overtaken by a local command. Bound state requests and prevent overlapping polls.
+- Passive state reads no longer extend the helper's eight-hour idle lifetime. Retain the existing token, Host/Origin and CSRF protections.
+- Explain that **Cast to TV** restarts playback after **Stop** closes the file-serving session. Add nine companion UI behavior tests and an idle-lifetime regression test; include both JavaScript suites in the release gate.
+
+The stale-window problem was reproduced in offline UI tests. The user's earlier intermittent control failure recovered before this patch; its cause remains unconfirmed. Physical-device observations below belong to 1.2.0. This patch has not been installed over an active helper or exercised on a physical TV.
+
 ## 1.2.0 release candidate — 11 October 2026
 
 - Correct Opera and Opera GX native-host registration on macOS to the documented shared Chrome folder. Preserve previously authorized extension IDs.

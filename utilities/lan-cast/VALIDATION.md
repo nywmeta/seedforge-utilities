@@ -1,15 +1,24 @@
-# Validation — LAN Cast 1.2.0 release candidate
+# Validation — LAN Cast 1.2.1 release candidate
 
-Checked on macOS on 11 October 2026. This record separates automated checks, installed-browser observations, and physical-TV evidence.
+Checked on macOS on 12 October 2026. This record separates the current maintenance patch's checks from installed-browser and physical-TV observations for 1.2.0.
 
-## Automated checks
+## 1.2.1 maintenance checks
+
+- Nine companion UI tests reproduce and check state changes from another window, staged/active video separation, preservation of a different TV selection, delayed snapshots across Cast/Stop/file-copy completion, hidden-window polling, overlapping polls, rejected commands and preservation of detailed status/messages.
+- A Python regression check confirms that passive state reads do not extend the idle lifetime or send a command to the TV.
+- Locally, **52 Python utility tests without sockets, all 56 JavaScript utility tests and all 18 publishing/packaging tests** passed. The complete local Python suite was blocked by this session's loopback socket permissions; no full local gate pass is claimed.
+- The complete release gate is `scripts/release.py` and runs in the repository's standard public GitHub workflow. Check the workflow run for the release tag's exact commit for the full socket-suite result. Publication requires that complete gate to pass and the downloadable ZIP to match its checked build.
+- The approved package contains **32 files**. No browser registration or active TV playback was changed while testing this patch. These UI tests simulate browser elements and requests; they do not establish a new installed-browser or hardware result.
+- The user's intermittent playback-button report recovered before this change. Its cause was not identified; this patch addresses a separately reproduced stale-window behavior.
+
+## Previous 1.2.0 automated checks
 
 - **77 Python utility tests** passed using Python 3.9.6: native framing, simulated renderer, SOAP/DIDL, controls/status, bounded device deadlines, isolated installer/launcher/uninstall, macOS shared Opera registration, helper asset preflight, companion reuse and startup errors, strict local interface URL validation, Host/Origin/CSRF checks, streamed private uploads, replacement/failure cleanup, TV-only serving, HTTP Range and HEAD responses.
 - **47 JavaScript utility tests** passed using the bundled Node runtime: minimal Manifest V3 permissions, trusted popup/native boundary, media scanner and inaccessible embedded-player guidance, helper errors, companion action and returned loopback URL validation, popup behavior, and browser-specific setup.
 - **18 offline publishing/packaging tests** passed. JavaScript and Mac launcher syntax checks passed; the new package contains 31 reviewed files.
 - Tests change no real browser registration; installer tests use temporary home directories. Socket tests use loopback simulated servers.
 
-## Observed on this Mac and TV
+## Observed on this Mac and TV with 1.2.0
 
 - Updated the existing unpacked Opera GX extension in place to **1.2.0**, preserving its extension ID. The original extension files were backed up before updating.
 - Installed the matching helper modules and Opera’s registration in its documented shared Chrome folder. After reload, the actual Opera GX popup showed **Local helper connected**.
@@ -32,7 +41,7 @@ From this utility folder:
 
 ```sh
 python3 -B -m unittest discover -s tests -v
-node --test tests/extension.test.mjs
+node --test tests/*.test.mjs
 ```
 
 For a complete release gate, use `python3 scripts/release.py --node node` from the Seedforge repository root. Restricted environments must allow local test sockets. Publication remains separate from local installation and validation.

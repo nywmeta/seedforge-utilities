@@ -83,7 +83,8 @@ def run_checks(node):
     require(major >= 22, 'Node 22+ is required for release checks')
     subprocess.run([sys.executable, '-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v'],
                    cwd=UTILITY, check=True)
-    subprocess.run([resolved, '--test', 'tests/extension.test.mjs'], cwd=UTILITY, check=True)
+    subprocess.run([resolved, '--test', *[str(path.relative_to(UTILITY))
+                    for path in sorted((UTILITY / 'tests').glob('*.test.mjs'))]], cwd=UTILITY, check=True)
     subprocess.run([sys.executable, '-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v'],
                    cwd=ROOT, check=True)
     for script in sorted((UTILITY / 'extension').glob('*.js')):

@@ -29,5 +29,6 @@
   "tests/test_file_cast.py",
   "tests/test_companion.py",
   "Cast downloaded video.command",
-  "AI-ASSISTANT.md"
+  "AI-ASSISTANT.md",
+  "tests/companion_ui.test.mjs"
 ]

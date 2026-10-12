@@ -24,6 +24,8 @@ Preferred first destination: a dedicated public GitHub repository named `seedfor
 
 After publication, read the public repository and release while signed out, check the tag/commit, verify asset names and download availability, and compare the downloadable ZIP's checksum when access permits. Save the actual URL, commit, tag and verification time. A local commit, a prepared page or a successful upload attempt is not publication. Leave `publication.verified_at` null until this succeeds.
 
+When local socket permissions prevent the complete gate or anonymous download check, the same standard free public workflow can run both. Its optional manual `verify_tag` input runs the full release gate and then `scripts/verify_publication.py` without authentication; the public verification record is printed to its logs. The locally packaged ZIP must match the checksum from that checked commit. Record the workflow result and actual verifier record; do not equate a queued or failed run with verification. No artifact/cache storage or broader token permission is needed.
+
 Use standard free GitHub runners only in public repositories. No artifact/cache storage, paid hosts, new subscriptions, paid APIs, advertising, purchased credits or resets. Existing Codex allowance is still consumed; inspect usage once per scheduled run and checkpoint optional work when remaining allowance is below 15%. Do not retry unchanged access failures each run.
 
 ## Optional support
